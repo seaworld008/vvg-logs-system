@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: 'VVG-Dashboards'
+    orgId: 1
+    folder: 'VVG Logs'
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards 

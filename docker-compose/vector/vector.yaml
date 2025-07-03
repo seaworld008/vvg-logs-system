@@ -1,0 +1,151 @@
+############################################
+# Vector 配置 - VVG 日志收集系统
+# 支持 Nginx 和 Java 多行日志收集
+############################################
+
+api:
+  enabled: true
+  address: 0.0.0.0:8686
+
+############################################################
+# 1️⃣ Sources: 日志源配置
+############################################################
+sources:
+  # Nginx Access 日志
+  nginx_access:
+    type: file
+    include: ["/var/log/nginx/*access*.log"]
+    ignore_older_secs: 86400          # 24h 无写入自动关闭句柄
+    max_read_bytes: 262144            # 单次 256 KiB
+    fingerprint:
+      strategy: checksum
+      important_bytes: 512
+
+  # Nginx Error 日志
+  nginx_error:
+    type: file
+    include: ["/var/log/nginx/*error*.log"]
+    ignore_older_secs: 86400
+    max_read_bytes: 262144
+    fingerprint:
+      strategy: checksum
+      important_bytes: 512
+
+  # Java 应用日志
+  java_logs:
+    type: file
+    include: ["/var/log/java/*/*.log"]
+    ignore_older_secs: 259200            # 3 天
+    max_read_bytes: 262144               # 256 KiB
+    fingerprint:
+      strategy: checksum
+      important_bytes: 1024
+    multiline:
+      # 首行形如 2025-06-25 12:34:56,789  …
+      start_pattern: '^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{3})?'
+      condition_pattern: '^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{3})?'
+      mode: halt_before
+      timeout_ms: 4000                   # 4 s 刷新残留
+    encoding:
+      charset: utf-8
+
+############################################################
+# 2️⃣ Transforms: 日志解析和处理
+############################################################
+transforms:
+  # Nginx Access 日志解析
+  parse_access:
+    type: remap
+    inputs: [nginx_access]
+    source: |
+      # 保留原始行到 _msg，并删除 message 字段，避免重复存储
+      msg = to_string!(.message)
+      ._msg = msg
+      del(.message)
+
+      # --- ① 已是 JSON 的自定义 access 日志 -----------------
+      if starts_with(msg, "{") {
+        parsed, _ = parse_json(msg)        # 捕获错误到 _，不触发 E103
+        if parsed != null {
+          . |= merge!(., parsed)              # 将解析结果并入事件
+        } else {
+          .raw = msg                       # 留存无法解析的原文
+        }
+
+      # --- ② 经典 Nginx main/plain 格式 ---------------------
+      } else {
+        .raw = msg                         # 如无需求暂不正则解析
+      }
+
+      .log_type = "access"
+      .service = "nginx"
+
+  # Nginx Error 日志解析
+  parse_error:
+    type: remap
+    inputs: [nginx_error]
+    source: |
+      # 保留原始行到 _msg，并删除 message 字段
+      msg = to_string!(.message)
+      ._msg = msg
+      del(.message)
+
+      # 通用 error 格式：2024/06/24 12:34:56 [level] pid: ...
+      parsed, _ = parse_regex(msg,
+        r'^(?P<time_local>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<level>[^\]]+)] (?P<pid>[^:]+): (?P<rest>.*)')
+      if parsed != null {
+        . |= merge!(., parsed)
+        .timestamp, _ = parse_timestamp(.time_local, "%Y/%m/%d %H:%M:%S")
+      } else {
+        .raw = msg
+      }
+
+      .log_type = "error"
+      .service = "nginx"
+
+  # Java 日志处理
+  parse_java:
+    type: remap
+    inputs: [java_logs]
+    source: |
+      ._msg = to_string!(.message)
+      del(.message)
+      .log_type = "application"
+      .service = "java"
+
+############################################################
+# 3️⃣ Sinks: 输出目标配置
+############################################################
+sinks:
+  # 发送到 VictoriaLogs
+  victorialogs:
+    type: loki
+    inputs: [parse_access, parse_error, parse_java]
+    endpoint: "${VLS_ENDPOINT}"
+    path: /insert/loki/api/v1/push
+    labels:
+      job: "{{ service }}"
+      log_type: "{{ log_type }}"
+      instance: "${HOSTNAME}"
+    encoding:
+      codec: json               # 推送完整事件 JSON，包含 _msg
+    batch:
+      max_bytes: 1048576        # 1 MiB
+      timeout_secs: 3
+    buffer:
+      type: disk
+      max_size: 10737418240     # 10 GiB
+      when_full: block
+    request:
+      concurrency: 4
+      compression: none
+    healthcheck: false
+
+  # 控制台输出（调试用）
+  console:
+    type: console
+    inputs: [parse_access, parse_error, parse_java]
+    target: stdout
+    encoding:
+      codec: text
+      field: _msg 

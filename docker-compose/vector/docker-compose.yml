@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  vector:
+    image: ${DOCKER_REGISTRY}/timberio/vector:${VECTOR_VERSION}
+    container_name: vector
+    restart: unless-stopped
+    user: root
+    environment:
+      - VECTOR_LOG=${VECTOR_LOG_LEVEL}
+      - TZ=${TIMEZONE}
+      - VLS_ENDPOINT=${VLS_ENDPOINT}
+      - HOSTNAME=${VECTOR_HOSTNAME}
+    volumes:
+      - ./vector.yaml:/etc/vector/vector.yaml:ro
+      - ${NGINX_LOG_PATH}:/var/log/nginx:ro
+      - ${JAVA_LOG_PATH}:/var/log/java:ro
+      - ${VECTOR_DATA_DIR}:/var/lib/vector
+    ports:
+      - "${VECTOR_PORT}:8686"
+    networks:
+      - vvg-monitoring
+    # 日志驱动 & 轮转，防止容器日志过大
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8686/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  vvg-monitoring:
+    driver: bridge
+    name: ${DOCKER_NETWORK} 

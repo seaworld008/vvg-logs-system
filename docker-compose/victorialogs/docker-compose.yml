@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  victorialogs:
+    image: ${DOCKER_REGISTRY}/victoriametrics/victoria-logs:${VICTORIALOGS_VERSION}
+    container_name: victorialogs
+    restart: always
+    ports:
+      - "${VICTORIALOGS_PORT}:9428"
+    volumes:
+      - ${VICTORIALOGS_DATA_DIR}:/victoria-logs-data
+    environment:
+      - TZ=${TIMEZONE}
+    command:
+      - '--storageDataPath=/victoria-logs-data'
+      - '--httpListenAddr=:9428'
+      - '--retentionPeriod=${VICTORIALOGS_RETENTION}'
+      - '--loggerFormat=json'
+      - '--loggerOutput=stderr'
+    networks:
+      - vvg-monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9428/metrics || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+networks:
+  vvg-monitoring:
+    driver: bridge
+    name: ${DOCKER_NETWORK} 

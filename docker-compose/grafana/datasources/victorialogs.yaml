@@ -1,0 +1,19 @@
+apiVersion: 1
+
+datasources:
+  - name: VictoriaLogs
+    type: victoriametrics-logs-datasource
+    access: proxy
+    url: http://172.18.151.163:9428  # 修改为实际的 VictoriaLogs 服务器地址
+    isDefault: true
+    jsonData:
+      maxLines: 5000
+      httpHeaderName1: 'X-Scope-OrgID'
+    secureJsonData:
+      httpHeaderValue1: '1'
+    editable: true
+
+# 配置说明:
+# 1. 将 url 中的 IP 地址改为实际的 VictoriaLogs 服务器 IP
+# 2. 如果 VictoriaLogs 在同一台机器上，可以使用 localhost:9428
+# 3. 如果使用 Docker 网络，可以使用容器名: victorialogs:9428 
