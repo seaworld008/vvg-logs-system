@@ -41,7 +41,7 @@ VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、�
 
 ## 🚀 快速开始
 
-本系统支持分布式部署，各组件可以独立部署在不同服务器上。
+本系统支持多种部署方式，可根据实际环境选择合适的部署架构。
 
 ### 部署架构选择
 
@@ -53,6 +53,11 @@ VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、�
 - VictoriaLogs: 部署在存储服务器
 - Grafana: 部署在展示服务器  
 - Vector: 部署在各个应用服务器
+
+**选项 3: Kubernetes 部署** ⭐ 新增
+- 适合容器化环境和微服务架构
+- 支持 Docker CRI 和 Containerd CRI
+- 专门优化的 Java 多行日志收集配置
 
 ### 部署步骤
 
@@ -95,6 +100,28 @@ docker-compose up -d
 
 详细说明: [Vector 部署文档](docker-compose/vector/README.md)
 
+#### 4. Kubernetes 部署 (可选) ⭐
+
+在 Kubernetes 环境中部署 Vector 进行日志收集:
+
+```bash
+# 1. 修改 VictoriaLogs 地址
+cd k8s-deployment
+# 编辑配置文件，设置 VictoriaLogs 服务器地址
+
+# 2. 根据容器运行时选择配置文件
+# Docker CRI
+kubectl apply -f vector-k8s-docker-cri.yaml
+
+# Containerd CRI  
+kubectl apply -f vector-k8s-containerd-cri.yaml
+
+# 3. 验证部署
+kubectl get pods -n logging
+```
+
+详细说明: [Kubernetes 部署文档](k8s-deployment/README.md)
+
 ### 验证部署
 
 1. **检查 VictoriaLogs**
@@ -111,7 +138,12 @@ http://Grafana_IP:3000
 
 3. **检查 Vector 状态**
 ```bash
+# Docker Compose 部署
 curl http://Vector_IP:8686/health
+
+# Kubernetes 部署
+kubectl get pods -n logging
+kubectl logs -n logging -l app=vector --tail=50
 ```
 
 ## 📁 项目结构
@@ -133,6 +165,10 @@ curl http://Vector_IP:8686/health
 │       ├── env.example
 │       ├── vector.yaml           # Vector 配置文件
 │       └── README.md
+├── k8s-deployment/                 # Kubernetes 部署配置 ⭐
+│   ├── vector-k8s-docker-cri.yaml    # Docker CRI 环境配置
+│   ├── vector-k8s-containerd-cri.yaml # Containerd CRI 环境配置
+│   └── README.md                  # K8S 部署说明
 ├── docs/                          # 文档目录
 │   └── troubleshooting.md        # 故障排查指南
 ├── LICENSE                        # 开源协议
@@ -147,24 +183,35 @@ curl http://Vector_IP:8686/health
 
 - **VictoriaLogs**: 端口、数据保留期、存储路径
 - **Grafana**: VictoriaLogs 地址、管理员密码、端口  
-- **Vector**: VictoriaLogs 地址、日志文件路径、主机标识
+- **Vector (Docker Compose)**: VictoriaLogs 地址、日志文件路径、主机标识
+- **Vector (Kubernetes)**: VictoriaLogs 地址、Java 多行日志规则、资源限制
 
 ### 网络配置
 
 各服务默认使用 `vvg-monitoring` 网络。分布式部署时，确保:
 - VictoriaLogs 的 9428 端口可被 Grafana 和 Vector 访问
 - Grafana 的 3000 端口可被用户访问
+- Kubernetes 环境中 Vector 能访问 VictoriaLogs 服务
 - 配置正确的防火墙规则
 
 ## 🔧 自定义配置
 
 ### 日志格式定制
 
-编辑 `docker-compose/vector/vector.yaml` 可以:
+编辑相应的配置文件可以:
+
+**Docker Compose 部署**:
+- 编辑 `docker-compose/vector/vector.yaml`
+
+**Kubernetes 部署**:
+- 编辑 `k8s-deployment/vector-k8s-*.yaml` 中的 ConfigMap
+
+支持的自定义内容:
 - 添加新的日志源
 - 修改日志解析规则  
 - 自定义数据处理逻辑
 - 配置日志过滤条件
+- Java 多行日志匹配规则
 
 ### 性能调优
 
@@ -179,6 +226,7 @@ curl http://Vector_IP:8686/health
 - [VictoriaLogs 部署说明](docker-compose/victorialogs/README.md)
 - [Grafana 部署说明](docker-compose/grafana/README.md)  
 - [Vector 部署说明](docker-compose/vector/README.md)
+- [Kubernetes 部署说明](k8s-deployment/README.md) ⭐
 
 ## 🤝 贡献
 
