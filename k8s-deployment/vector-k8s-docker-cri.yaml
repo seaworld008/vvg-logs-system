@@ -1,13 +1,7 @@
 ############################################
-# Vector K8S DaemonSet - Docker CRI 版本
-# 用于收集 Java 微服务多行日志
-# 发送到 VictoriaLogs (使用 Loki API)
+# Vector K8S DaemonSet - Docker CRI 官方最佳实践版本
+# 基于官方文档：https://github.com/vectordotdev/vector
 ############################################
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: logging
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -15,98 +9,67 @@ metadata:
   namespace: logging
 data:
   vector.yaml: |
-    ############################################################
-    # Vector 配置 - K8S Docker CRI
-    ############################################################
+    # 数据目录
+    data_dir: "/var/lib/vector"
+    
+    # API
     api:
       enabled: true
-      address: 0.0.0.0:8686
-
-    ############################################################
-    # Sources: 日志源配置
-    ############################################################
+      address: "0.0.0.0:8686"
+    
+    # 使用官方推荐的kubernetes_logs源
     sources:
-      # Kubernetes 日志收集（Docker CRI）
-      kubernetes_logs:
-        type: kubernetes_logs
+      k8s_logs:
+        type: "kubernetes_logs"
+        # 官方推荐：自动处理多行日志合并
         auto_partial_merge: true
-        glob_minimum_cooldown_ms: 1000
-        # 只收集 Java 应用日志
-        extra_label_selector: "app.kubernetes.io/component=java"
-        # 多行日志配置（Java 应用）
-        multiline:
-          start_pattern: '^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{3})?'
-          condition_pattern: '^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{3})?'
-          mode: halt_before
-          timeout_ms: 4000
-
-    ############################################################
-    # Transforms: 日志处理
-    ############################################################
+        # 只收集Java应用，通过标签过滤
+        extra_label_selector: "app!=fluentd,app!=vector"
+    
+    # 最简单的处理：只过滤健康检查
     transforms:
-      # 处理 K8S 日志
-      process_k8s_logs:
+      filter_java_logs:
+        type: filter
+        inputs: [k8s_logs]
+        condition: |
+          # 只排除明显的健康检查
+          !contains(string!(.message), "/actuator/health") && 
+          !contains(string!(.message), "/health")
+      
+      # 添加VictoriaLogs所需的_msg字段
+      add_msg_field:
         type: remap
-        inputs: [kubernetes_logs]
+        inputs: [filter_java_logs]
         source: |
-          # 保留消息到 _msg 字段
-          ._msg = to_string!(.message)
-          del(.message)
-          
-          # 提取 K8S 元数据
-          .namespace = .kubernetes.pod_namespace
-          .pod_name = .kubernetes.pod_name
-          .container_name = .kubernetes.container_name
-          .node_name = "${VECTOR_SELF_NODE_NAME}"
-          
-          # 添加服务标签
-          .service = .kubernetes.pod_labels."app.kubernetes.io/name" ?? .kubernetes.pod_labels.app ?? "unknown"
-          .log_type = "application"
-          
-          # 清理不需要的字段
-          del(.kubernetes)
-          del(.file)
-          del(.source_type)
-
-    ############################################################
-    # Sinks: 输出配置
-    ############################################################
+          ._msg = .message
+    
+    # 输出
     sinks:
-      # 发送到 VictoriaLogs (使用 Loki API)
+      # VictoriaLogs
       victorialogs:
         type: loki
-        inputs: [process_k8s_logs]
-        endpoint: "${VLS_ENDPOINT:-http://victorialogs:9428}"
+        inputs: [add_msg_field]
+        endpoint: "http://172.18.151.163:9428"
         path: /insert/loki/api/v1/push
         labels:
-          job: "{{ service }}"
-          namespace: "{{ namespace }}"
-          pod: "{{ pod_name }}"
-          container: "{{ container_name }}"
-          node: "{{ node_name }}"
-          log_type: "{{ log_type }}"
+          job: "java-app"
+          namespace: "{{ kubernetes.pod_namespace }}"
+          pod: "{{ kubernetes.pod_name }}"
+          container: "{{ kubernetes.container_name }}"
         encoding:
           codec: json
+        # 添加批处理和缓冲配置
         batch:
-          max_bytes: 1048576        # 1 MiB
-          timeout_secs: 3
+          max_bytes: 102400
+          timeout_secs: 5
         buffer:
           type: memory
-          max_events: 50000
+          max_events: 1000
           when_full: drop_newest
-        request:
-          concurrency: 4
-          compression: gzip         # K8S 环境建议开启压缩
+        # 禁用健康检查避免400错误
         healthcheck: false
-
-      # 控制台输出（调试用，生产环境可删除）
-      console:
-        type: console
-        inputs: [process_k8s_logs]
-        target: stdout
-        encoding:
-          codec: text
-          field: _msg
+        request:
+          timeout_secs: 30
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -122,7 +85,7 @@ rules:
   - apiGroups: [""]
     resources:
       - namespaces
-      - nodes
+      - nodes  
       - pods
     verbs: ["get", "list", "watch"]
 ---
@@ -160,23 +123,12 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
       - name: vector
-        image: timberio/vector:0.41.1-alpine
-        imagePullPolicy: IfNotPresent
+        image: registry.cn-shenzhen.aliyuncs.com/starsl/vector:0.41.1-alpine
         env:
         - name: VECTOR_SELF_NODE_NAME
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        - name: VECTOR_SELF_POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: VECTOR_SELF_POD_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        - name: VLS_ENDPOINT
-          value: "http://victorialogs.logging.svc.cluster.local:9428"
         - name: VECTOR_LOG
           value: "warn"
         - name: TZ
@@ -184,7 +136,6 @@ spec:
         ports:
         - name: api
           containerPort: 8686
-          protocol: TCP
         resources:
           requests:
             memory: "128Mi"
@@ -195,7 +146,6 @@ spec:
         volumeMounts:
         - name: config
           mountPath: /etc/vector
-          readOnly: true
         - name: data
           mountPath: /var/lib/vector
         - name: var-log
@@ -210,19 +160,10 @@ spec:
             port: api
           initialDelaySeconds: 30
           periodSeconds: 30
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: api
-          initialDelaySeconds: 10
-          periodSeconds: 10
       volumes:
       - name: config
         configMap:
           name: vector-config
-          items:
-          - key: vector.yaml
-            path: vector.yaml
       - name: data
         hostPath:
           path: /var/lib/vector
@@ -233,32 +174,3 @@ spec:
       - name: var-lib-docker-containers
         hostPath:
           path: /var/lib/docker/containers
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: vector-api
-  namespace: logging
-  labels:
-    app: vector
-spec:
-  type: ClusterIP
-  ports:
-  - port: 8686
-    targetPort: 8686
-    name: api
-  selector:
-    app: vector
----
-# VictoriaLogs Service (如果需要在集群内部署)
-apiVersion: v1
-kind: Service
-metadata:
-  name: victorialogs
-  namespace: logging
-spec:
-  type: ExternalName
-  externalName: your-victorialogs-host.com  # 替换为实际的 VictoriaLogs 地址
-  ports:
-  - port: 9428
-    targetPort: 9428
