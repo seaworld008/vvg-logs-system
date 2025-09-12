@@ -22,7 +22,7 @@ VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、�
 
 - **🚀 高性能**: VictoriaLogs 提供极高的写入和查询性能
 - **📦 轻量级**: 相比 ELK 栈，资源占用更少
-- **🔧 易部署**: Docker Compose 一键部署，支持分布式部署
+- **🔧 易部署**: Docker Compose 一键部署，支持kubernetes分布式部署
 - **📊 可视化**: Grafana 提供强大的日志查询和可视化功能
 - **🔍 智能解析**: 自动识别 Nginx 和 Java 日志格式
 - **🔄 高可用**: 支持多实例部署和负载均衡
