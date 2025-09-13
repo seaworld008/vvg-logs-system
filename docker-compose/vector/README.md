@@ -42,6 +42,13 @@ docker-compose logs -f vector
 - `JAVA_LOG_PATH`: Java 应用日志文件路径
 - `VECTOR_DATA_DIR`: Vector 数据存储路径
 
+### 性能优化配置
+
+- **批处理优化**: 1MB字节限制 + 500事件限制，双重限制机制
+- **gzip压缩传输**: 大幅减少网络带宽占用
+- **磁盘缓冲**: 10GB磁盘缓冲，防止数据丢失
+- **多行日志支持**: Java异常堆栈自动合并（4秒超时）
+
 ### 日志格式支持
 
 - **Nginx Access Log**: 支持标准格式和 JSON 格式

@@ -131,6 +131,7 @@ sinks:
       type: memory
       max_events: 10000      # 10倍容错缓冲，提高可靠性
       when_full: drop_newest # 缓冲满时丢弃最新数据
+    compression: gzip        # gzip压缩，大幅减少网络带宽
     healthcheck: false       # 禁用健康检查避免400错误
 ```
 

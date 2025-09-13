@@ -131,6 +131,7 @@ sinks:
       codec: json               # 推送完整事件 JSON，包含 _msg
     batch:
       max_bytes: 1048576        # 1 MiB
+      max_events: 500           # 双重限制，先达到的生效
       timeout_secs: 3
     buffer:
       type: disk
@@ -138,7 +139,7 @@ sinks:
       when_full: block
     request:
       concurrency: 4
-      compression: none
+      compression: gzip         # 启用gzip压缩，减少网络带宽
     healthcheck: false
 
   # 控制台输出（调试用）

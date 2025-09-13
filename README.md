@@ -62,6 +62,7 @@ VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、�
 - **Java多行日志增强**: 异常堆栈自动合并 ⭐
 - **双层多行处理**: 容器分割 + 应用层处理
 - **高性能缓冲**: 10倍容错缓冲区，1MB批处理
+- **gzip压缩传输**: 大幅减少网络带宽占用
 
 ### 部署步骤
 
@@ -222,7 +223,7 @@ kubectl logs -n logging -l app=vector --tail=50
 根据数据量调整:
 - **VictoriaLogs**: 内存限制和查询参数
 - **Vector**: 批处理大小和缓冲区配置
-  - Kubernetes版本已优化：1MB批处理 + 10K事件缓冲 ⭐
+  - Kubernetes版本已优化：1MB批处理 + 10K事件缓冲 + gzip压缩 ⭐
   - 支持双重限制机制，先达到的条件触发批处理
 - **Grafana**: 查询超时和缓存设置
 
