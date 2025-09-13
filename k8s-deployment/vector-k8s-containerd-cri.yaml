@@ -26,20 +26,38 @@ data:
         # 只收集Java应用，通过标签过滤
         extra_label_selector: "app!=fluentd,app!=vector"
     
-    # 最简单的处理：只过滤健康检查
+    # 日志处理流水线
     transforms:
+      # 1. 过滤健康检查日志
       filter_java_logs:
         type: filter
         inputs: [k8s_logs]
         condition: |
           # 只排除明显的健康检查
-          !contains(string!(.message), "/actuator/health") && 
+          !contains(string!(.message), "/actuator/health") &&
           !contains(string!(.message), "/health")
-      
-      # 添加VictoriaLogs所需的_msg字段
+
+      # 2. Java多行日志增强处理
+      enhance_multiline:
+        type: reduce
+        inputs: [filter_java_logs]
+        # 使用你提供的优化模式匹配Java日志
+        group_by:
+          - kubernetes.pod_name
+          - kubernetes.container_name
+        # 识别新日志行的开始模式
+        starts_when: |
+          match(string!(.message), r'^(\d{4}-\d{2}-\d{2}(?:T|\s)\d{2}:\d{2}:\d{2}|\b(INFO|WARN|DEBUG|ERROR|FATAL|TRACE)\b)')
+        # 3秒超时，确保异常堆栈及时输出
+        expire_after_ms: 3000
+        # 合并策略：将多行合并为单条消息
+        merge_strategies:
+          message: concat_newline
+
+      # 3. 添加VictoriaLogs所需的_msg字段
       add_msg_field:
         type: remap
-        inputs: [filter_java_logs]
+        inputs: [enhance_multiline]
         source: |
           ._msg = .message
     
