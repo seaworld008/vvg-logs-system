@@ -13,7 +13,9 @@
 ## 主要特性
 
 - ✅ **官方最佳实践**：使用 `kubernetes_logs` 源，支持自动多行日志合并
-- ✅ **简化配置**：基于 Vector 官方推荐，配置简洁易维护
+- ✅ **双层多行处理**：容器运行时层 + Java应用层多行日志处理
+- ✅ **Java异常堆栈**：自动合并Java异常堆栈为单条记录
+- ✅ **智能日志识别**：支持时间戳和日志级别开头的日志格式
 - ✅ **VictoriaLogs 集成**：使用 Loki API 发送日志，包含 `_msg` 字段
 - ✅ **K8S 元数据**：自动提取 namespace、pod、container 等信息
 - ✅ **健康检查过滤**：自动过滤 `/actuator/health` 等健康检查日志
@@ -81,10 +83,26 @@ transforms:
   filter_java_logs:
     type: filter
     condition: |
-      !contains(string!(.message), "/actuator/health") && 
+      !contains(string!(.message), "/actuator/health") &&
       !contains(string!(.message), "/health")
-  
-  # 2. 添加 VictoriaLogs 所需的 _msg 字段
+
+  # 2. Java多行日志增强处理
+  enhance_multiline:
+    type: reduce
+    # 按pod和container分组处理
+    group_by:
+      - kubernetes.pod_name
+      - kubernetes.container_name
+    # 识别Java日志开始行（时间戳或日志级别）
+    starts_when: |
+      match(string!(.message), r'^(\d{4}-\d{2}-\d{2}(?:T|\s)\d{2}:\d{2}:\d{2}|\b(INFO|WARN|DEBUG|ERROR|FATAL|TRACE)\b)')
+    # 3秒超时确保异常堆栈及时输出
+    expire_after_ms: 3000
+    # 换行连接策略，保持堆栈可读性
+    merge_strategies:
+      message: concat_newline
+
+  # 3. 添加 VictoriaLogs 所需的 _msg 字段
   add_msg_field:
     type: remap
     source: |
@@ -196,12 +214,62 @@ resources:
 
 根据集群规模和日志量可适当调整。
 
-## 支持的日志格式
+## Java 多行日志处理
 
-Vector 会自动处理以下格式的 Java 多行日志：
-- Spring Boot 默认格式
-- Log4j/Log4j2 格式  
-- Logback 格式
-- 自定义格式（只要有时间戳开头）
+### 双层多行日志处理机制
 
-异常堆栈会自动合并为单条日志记录。
+配置采用双层多行日志处理架构：
+
+1. **容器运行时层** (`kubernetes_logs.auto_partial_merge`)
+   - 处理Docker/containerd的16KB日志分割问题
+   - 自动合并被容器运行时拆分的日志行
+
+2. **应用层** (`reduce` transform)
+   - 处理Java应用真正的多行日志（异常堆栈、多行消息）
+   - 使用精确的正则表达式识别日志边界
+
+### 支持的 Java 日志格式
+
+自动识别以下格式的日志开始行：
+
+```
+# 时间戳格式
+2025-01-15 10:30:45,123 ERROR [main] com.example.App - Error occurred
+2025-01-15T10:30:45.123 INFO  [http-nio-8080-exec-1] - Processing request
+
+# 日志级别开头
+INFO  2025-01-15 10:30:45 - Application started
+ERROR Exception in thread "main"
+WARN  Configuration file not found
+```
+
+### 异常堆栈处理示例
+
+**输入**（多行）：
+```
+2025-01-15 10:30:45,123 ERROR [main] com.example.Service - Database connection failed
+java.sql.SQLException: Connection refused
+    at java.sql.DriverManager.getConnection(DriverManager.java:664)
+    at com.example.Service.connect(Service.java:45)
+    at com.example.App.main(App.java:12)
+Caused by: java.net.ConnectException: Connection refused
+    at java.net.PlainSocketImpl.socketConnect(PlainSocketImpl.java:113)
+```
+
+**输出**（合并为单条）：
+```
+2025-01-15 10:30:45,123 ERROR [main] com.example.Service - Database connection failed
+java.sql.SQLException: Connection refused
+    at java.sql.DriverManager.getConnection(DriverManager.java:664)
+    at com.example.Service.connect(Service.java:45)
+    at com.example.App.main(App.java:12)
+Caused by: java.net.ConnectException: Connection refused
+    at java.net.PlainSocketImpl.socketConnect(PlainSocketImpl.java:113)
+```
+
+### 配置参数说明
+
+- **`group_by`**: 按pod和container分组，确保不同容器日志不串扰
+- **`starts_when`**: 正则表达式识别新日志行开始
+- **`expire_after_ms: 3000`**: 3秒超时，确保异常堆栈及时输出
+- **`concat_newline`**: 保持原有换行格式，便于阅读
