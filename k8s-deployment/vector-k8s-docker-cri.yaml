@@ -76,14 +76,15 @@ data:
           container: "{{ kubernetes.container_name }}"
         encoding:
           codec: json
-        # 添加批处理和缓冲配置
+        # 优化批处理和缓冲配置（基于官方最佳实践）
         batch:
-          max_bytes: 102400
-          timeout_secs: 5
+          max_bytes: 1048576      # 1MB批大小，官方推荐
+          max_events: 500         # 双重限制，先达到的生效
+          timeout_secs: 5         # 5秒批超时
         buffer:
           type: memory
-          max_events: 1000
-          when_full: drop_newest
+          max_events: 10000       # 10倍缓冲容量，提高容错率
+          when_full: drop_newest  # 缓冲满时丢弃最新数据
         # 禁用健康检查避免400错误
         healthcheck: false
         request:

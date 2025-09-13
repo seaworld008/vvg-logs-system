@@ -122,13 +122,15 @@ sinks:
       namespace: "{{ kubernetes.pod_namespace }}"
       pod: "{{ kubernetes.pod_name }}"
       container: "{{ kubernetes.container_name }}"
-    # 性能优化配置
+    # 高性能缓冲配置（基于官方最佳实践）
     batch:
-      max_bytes: 102400      # 100KB 批大小
+      max_bytes: 1048576     # 1MB 批大小，官方推荐
+      max_events: 500        # 双重限制，先达到的生效
       timeout_secs: 5        # 5秒批超时
     buffer:
       type: memory
-      max_events: 1000       # 内存缓冲1000条
+      max_events: 10000      # 10倍容错缓冲，提高可靠性
+      when_full: drop_newest # 缓冲满时丢弃最新数据
     healthcheck: false       # 禁用健康检查避免400错误
 ```
 

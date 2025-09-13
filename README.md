@@ -36,7 +36,9 @@ VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、�
 
 ### Java 应用日志
 - **单行日志**: 标准 Java 应用日志
-- **多行日志**: 异常堆栈、调试信息等
+- **多行日志**: 异常堆栈、调试信息自动合并 ⭐
+- **智能识别**: 支持时间戳和日志级别开头格式
+- **双层处理**: 容器运行时层 + 应用层多行处理 ⭐
 - **JSON 格式**: 结构化 Java 日志
 
 ## 🚀 快速开始
@@ -54,10 +56,12 @@ VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、�
 - Grafana: 部署在展示服务器  
 - Vector: 部署在各个应用服务器
 
-**选项 3: Kubernetes 部署** ⭐ 新增
+**选项 3: Kubernetes 部署** ⭐ 推荐
 - 适合容器化环境和微服务架构
 - 支持 Docker CRI 和 Containerd CRI
-- 专门优化的 Java 多行日志收集配置
+- **Java多行日志增强**: 异常堆栈自动合并 ⭐
+- **双层多行处理**: 容器分割 + 应用层处理
+- **高性能缓冲**: 10倍容错缓冲区，1MB批处理
 
 ### 部署步骤
 
@@ -184,7 +188,7 @@ kubectl logs -n logging -l app=vector --tail=50
 - **VictoriaLogs**: 端口、数据保留期、存储路径
 - **Grafana**: VictoriaLogs 地址、管理员密码、端口  
 - **Vector (Docker Compose)**: VictoriaLogs 地址、日志文件路径、主机标识
-- **Vector (Kubernetes)**: VictoriaLogs 地址、Java 多行日志规则、资源限制
+- **Vector (Kubernetes)**: VictoriaLogs 地址、Java 多行日志增强处理、高性能缓冲配置
 
 ### 网络配置
 
@@ -216,9 +220,11 @@ kubectl logs -n logging -l app=vector --tail=50
 ### 性能调优
 
 根据数据量调整:
-- VictoriaLogs 内存限制和查询参数
-- Vector 批处理大小和缓冲区配置
-- Grafana 查询超时和缓存设置
+- **VictoriaLogs**: 内存限制和查询参数
+- **Vector**: 批处理大小和缓冲区配置
+  - Kubernetes版本已优化：1MB批处理 + 10K事件缓冲 ⭐
+  - 支持双重限制机制，先达到的条件触发批处理
+- **Grafana**: 查询超时和缓存设置
 
 ## 📖 文档
 
