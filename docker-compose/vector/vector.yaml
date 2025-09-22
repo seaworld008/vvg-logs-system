@@ -14,6 +14,7 @@ sources:
   # Nginx Access 日志
   nginx_access:
     type: file
+    #vector 可以递归收集/var/log/runtime/目录下所有路径的.log日志可以这么配置：- "/var/log/runtime/**/*.log"
     include: ["/var/log/nginx/*access*.log"]
     ignore_older_secs: 86400          # 24h 无写入自动关闭句柄
     max_read_bytes: 262144            # 单次 256 KiB
