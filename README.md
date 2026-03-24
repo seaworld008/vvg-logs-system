@@ -1,6 +1,6 @@
 # VVG 日志收集系统
 
-VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、存储和可视化解决方案。
+VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、存储、查询和可视化解决方案。
 
 ## 🏗️ 系统架构
 
