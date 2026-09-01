@@ -16,8 +16,11 @@ sources:
     type: file
     #vector 可以递归收集/var/log/runtime/目录下所有路径的.log日志可以这么配置：- "/var/log/runtime/**/*.log"
     include: ["/var/log/nginx/*access*.log"]
+    exclude: ["/var/log/nginx/**/*.gz", "/var/log/nginx/**/*.tmp"]
+    glob_minimum_cooldown_ms: 1000
+    oldest_first: false
     ignore_older_secs: 86400          # 24h 无写入自动关闭句柄
-    max_read_bytes: 262144            # 单次 256 KiB
+    max_read_bytes: 65536             # 单次 64 KiB，在多个活跃文件间公平读取
     fingerprint:
       strategy: checksum
       important_bytes: 512
@@ -26,8 +29,11 @@ sources:
   nginx_error:
     type: file
     include: ["/var/log/nginx/*error*.log"]
+    exclude: ["/var/log/nginx/**/*.gz", "/var/log/nginx/**/*.tmp"]
+    glob_minimum_cooldown_ms: 1000
+    oldest_first: false
     ignore_older_secs: 86400
-    max_read_bytes: 262144
+    max_read_bytes: 65536
     fingerprint:
       strategy: checksum
       important_bytes: 512
@@ -36,8 +42,11 @@ sources:
   java_logs:
     type: file
     include: ["/var/log/java/*/*.log"]
+    exclude: ["/var/log/java/**/*.gz", "/var/log/java/**/*.tmp"]
+    glob_minimum_cooldown_ms: 1000
+    oldest_first: false
     ignore_older_secs: 259200            # 3 天
-    max_read_bytes: 262144               # 256 KiB
+    max_read_bytes: 65536                # 64 KiB
     fingerprint:
       strategy: checksum
       important_bytes: 1024
@@ -46,7 +55,7 @@ sources:
       start_pattern: '^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{3})?'
       condition_pattern: '^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{3})?'
       mode: halt_before
-      timeout_ms: 4000                   # 4 s 刷新残留
+      timeout_ms: 3000                   # 3 s 刷新残留
     encoding:
       charset: utf-8
 
@@ -133,7 +142,7 @@ sinks:
     batch:
       max_bytes: 1048576        # 1 MiB
       max_events: 500           # 双重限制，先达到的生效
-      timeout_secs: 3
+      timeout_secs: 1
     buffer:
       type: disk
       max_size: 10737418240     # 10 GiB
@@ -142,12 +151,3 @@ sinks:
       concurrency: 4
       compression: gzip         # 启用gzip压缩，减少网络带宽
     healthcheck: false
-
-  # 控制台输出（调试用）
-  console:
-    type: console
-    inputs: [parse_access, parse_error, parse_java]
-    target: stdout
-    encoding:
-      codec: text
-      field: _msg 

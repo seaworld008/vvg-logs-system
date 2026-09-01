@@ -47,7 +47,12 @@ docker-compose logs -f vector
 - **批处理优化**: 1MB字节限制 + 500事件限制，双重限制机制
 - **gzip压缩传输**: 大幅减少网络带宽占用
 - **磁盘缓冲**: 10GB磁盘缓冲，防止数据丢失
-- **多行日志支持**: Java异常堆栈自动合并（4秒超时）
+- **低延迟发现**: 普通文件源每 1 秒发现新文件，并显式排除 `.gz/.tmp`
+- **公平读取**: 每次读取 64 KiB，避免单个积压文件长期阻塞其他活跃日志
+- **多行日志支持**: Java异常堆栈自动合并（3秒超时）
+- **低延迟批次**: 最长 1 秒发送一个未满批次
+
+Vector `file` source 默认会一直持有已打开的轮转文件直到读完，本配置保留该行为。不要无证据设置较短的 `rotate_wait_secs`；日志轮转侧优先使用 `delaycompress`。
 
 ### 日志格式支持
 
@@ -83,4 +88,18 @@ curl http://localhost:8686/health
 
 # 查看 Vector 日志
 docker-compose logs vector
-``` 
+```
+
+### 临时查看事件流
+
+默认不再配置 console sink，避免所有业务日志重复写入 Docker json-file。需要调试时使用 Vector API 的采样能力：
+
+```bash
+docker exec vector vector tap \
+  --url http://127.0.0.1:8686 \
+  --outputs-of 'parse_*' \
+  --limit 20 \
+  --duration_ms 10000
+```
+
+Vector API 没有认证能力，因此 Compose 默认把宿主机端口绑定到 `127.0.0.1`。只有在受控管理网络并配套访问控制时，才修改 `VECTOR_API_BIND`。

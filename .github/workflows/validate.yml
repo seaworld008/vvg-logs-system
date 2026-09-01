@@ -1,0 +1,26 @@
+name: Validate VVG configurations
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Run static configuration checks
+        run: bash scripts/validate-configs.sh --static
+
+      - name: Run Compose and Vector validation
+        run: bash scripts/validate-configs.sh --runtime

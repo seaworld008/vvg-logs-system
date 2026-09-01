@@ -2,7 +2,7 @@
 
 VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、存储、查询和可视化解决方案。
 
-当前验证基线：Vector `0.58.0`、VictoriaLogs `v1.52.0`。生产升级和日志“延迟后批量涌入”排查请先阅读 [专项运行手册](docs/vector-victorialogs-latency-runbook.md)。
+当前验证基线：Vector `0.58.0`、VictoriaLogs `v1.52.0`、Grafana `13.2.0-ubuntu`、VictoriaLogs Grafana 插件 `0.31.0`。生产升级和故障排查请先阅读 [采集延迟运行手册](docs/vector-victorialogs-latency-runbook.md) 与 [查询性能运行手册](docs/grafana-victorialogs-query-performance-runbook.md)。
 
 ## 🏗️ 系统架构
 
@@ -27,7 +27,7 @@ VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、�
 - **🔧 易部署**: Docker Compose 一键部署，vector支持kubernetes分布式部署
 - **📊 可视化**: Grafana 提供强大的日志查询和可视化功能
 - **🔍 智能解析**: 自动识别 Nginx 和 Java 日志格式
-- **🔄 高可用**: 支持多实例部署和负载均衡
+- **🔄 可靠传输**: 持久磁盘缓冲、背压和可回滚升级，后端短时维护不主动丢新日志
 
 ## 📋 支持的日志格式
 
@@ -86,9 +86,13 @@ docker-compose up -d
 cd docker-compose/grafana
 cp env.example .env
 # 编辑 .env 文件，设置 VictoriaLogs 服务器地址
+docker build \
+  --build-arg GRAFANA_VERSION=13.2.0-ubuntu \
+  --build-arg VICTORIALOGS_PLUGIN_VERSION=0.31.0 \
+  -t vvg-grafana:13.2.0-plugin0.31.0 .
 sudo mkdir -p /data/grafana/grafana-data
 sudo chown 472:472 /data/grafana/grafana-data
-docker-compose up -d
+docker compose --env-file .env up -d
 ```
 
 详细说明: [Grafana 部署文档](docker-compose/grafana/README.md)
@@ -145,13 +149,28 @@ http://Grafana_IP:3000
 
 3. **检查 Vector 状态**
 ```bash
-# Docker Compose 部署
-curl http://Vector_IP:8686/health
+# Docker Compose 默认只绑定宿主机 loopback
+curl http://127.0.0.1:8686/health
 
 # Kubernetes 部署
 kubectl get pods -n logging
 kubectl logs -n logging -l app=vector --tail=50
 ```
+
+### 配置校验
+
+提交或部署前运行：
+
+```bash
+# 不需要 Docker，检查固定版本、危险默认值、凭据和关键基线
+bash scripts/validate-configs.sh --static
+
+# 需要 Docker；展开三套 Compose、构建 Grafana 插件镜像，
+# 并用 Vector 0.58 实际校验 Docker 与两套 K8S 配置
+bash scripts/validate-configs.sh --runtime
+```
+
+Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验。`.env`、`服务器信息.txt` 和运行数据目录不得提交到仓库。
 
 ## 📁 项目结构
 
@@ -162,6 +181,7 @@ kubectl logs -n logging -l app=vector --tail=50
 │   │   ├── env.example           # 环境变量配置模板
 │   │   └── README.md             # 部署说明
 │   ├── grafana/                   # Grafana 可视化
+│   │   ├── Dockerfile             # 构建期预装固定版本插件
 │   │   ├── docker-compose.yml
 │   │   ├── env.example
 │   │   ├── datasources/          # 数据源配置
@@ -176,8 +196,9 @@ kubectl logs -n logging -l app=vector --tail=50
 │   ├── vector-k8s-docker-cri.yaml    # Docker CRI 环境配置
 │   ├── vector-k8s-containerd-cri.yaml # Containerd CRI 环境配置
 │   └── README.md                  # K8S 部署说明
-├── docs/                          # 文档目录
-│   └── troubleshooting.md        # 故障排查指南
+├── docs/                          # 文档与运行手册
+├── scripts/                       # 统一配置校验
+├── .github/workflows/             # PR/主分支自动校验
 ├── LICENSE                        # 开源协议
 └── README.md                      # 项目说明
 ```
@@ -224,16 +245,19 @@ kubectl logs -n logging -l app=vector --tail=50
 
 根据数据量调整:
 - **VictoriaLogs**: 内存限制和查询参数
+  - 默认查询并发 4；仅在触顶/超时指标增长且资源有余量时提高
 - **Vector**: 批处理大小和缓冲区配置
+  - Docker file source：1秒发现 + 64KiB公平读取 + 10GiB磁盘缓冲
   - Kubernetes 版本：1MB/500事件批次 + 1秒超时 + 1GiB磁盘缓冲
   - 显式排除 `.gz/.tmp`，避免快速轮转文件晚读后批量涌入
   - 保留真实事件时间，不使用 `rewrite_timestamp` 掩盖积压
-- **Grafana**: 查询超时和缓存设置
+- **Grafana**: Explore 默认15分钟、最多2000行、60秒数据源超时
 
 ## 📖 文档
 
 - [故障排查指南](docs/troubleshooting.md)
 - [Vector/VictoriaLogs 延迟排查与升级运行手册](docs/vector-victorialogs-latency-runbook.md)
+- [Grafana/VictoriaLogs 查询性能与升级运行手册](docs/grafana-victorialogs-query-performance-runbook.md)
 - [VictoriaLogs 部署说明](docker-compose/victorialogs/README.md)
 - [Grafana 部署说明](docker-compose/grafana/README.md)  
 - [Vector 部署说明](docker-compose/vector/README.md)
