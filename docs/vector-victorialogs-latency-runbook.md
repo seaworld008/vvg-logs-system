@@ -187,6 +187,14 @@ docker push "${PRIVATE_REGISTRY}/victoriametrics/victoria-logs:${VL_VERSION}"
 
 升级前用临时 Pod 在每个节点验证私库 tag 能被 `imagePullSecrets` 拉取并实际执行 `vector --version`，验证完成立即删除临时 Pod。
 
+对仍在使用 Docker 19/20 的集群，在应用 DaemonSet 之前逐节点完成三项检查：
+
+1. `docker info --format 'root={{.DockerRootDir}}'` 与容器日志链接指向一致，现有 runtime 挂载不会被误删。
+2. 目标镜像已经存在本地，并记录源拉取节点的 `RepoDigests` 和所有节点的镜像 `.Id`。
+3. 每个工作节点到 VictoriaLogs `/health` 的内网访问成功。
+
+Docker 19 默认可能报告 `docker manifest inspect is only supported on a Docker cli with experimental cli features enabled`。不要为了这个检查临时改 Docker 全局配置；用受控拉取的 `RepoDigests` 与加载后的镜像 `.Id` 建立证据链。通过 `docker save/load` 加载的镜像可能没有 `RepoDigests`，这不等于镜像内容不一致。
+
 ## 7. 安全升级流程
 
 ### 7.1 备份 Vector
@@ -194,15 +202,21 @@ docker push "${PRIVATE_REGISTRY}/victoriametrics/victoria-logs:${VL_VERSION}"
 ```bash
 STAMP=$(date +%Y%m%d-%H%M%S)
 BACKUP="/root/vector-maint-${STAMP}"
+SOURCE_MANIFEST="/path/to/vector-k8s-runtime-cri.yaml"
 install -d -m 700 "${BACKUP}"
 
+cp -a "${SOURCE_MANIFEST}" "${BACKUP}/source.before.yaml"
 kubectl -n logging get configmap vector-config -o yaml \
   > "${BACKUP}/vector-config.yaml"
 kubectl -n logging get daemonset vector -o yaml \
   > "${BACKUP}/vector-daemonset.yaml"
 kubectl -n logging get pods -l app=vector -o wide \
   > "${BACKUP}/pods.before.txt"
+curl -fsS http://VICTORIALOGS_HOST:9428/metrics \
+  > "${BACKUP}/victorialogs.metrics.before.txt"
 ```
+
+同时备份实际用于部署的源清单，不要只保留 `kubectl get` 导出的运行时对象。前者更适合直接回滚，后者用于审计现场差异。
 
 ### 7.2 离线校验
 
@@ -221,6 +235,8 @@ docker run --rm \
 
 从 ConfigMap 提取 `vector.yaml` 后执行第二条命令。校验必须包含 VRL transforms，不能只做 YAML 语法检查。
 
+目标镜像无法直接在所有节点拉取时，先在一个能拉取的节点完成上述验证，再将已验证镜像传递至其他节点。所有节点的镜像 `.Id` 一致后才开始滚动，避免在更新中途发现镜像不可用。
+
 ### 7.3 滚动 Vector
 
 ```bash
@@ -230,6 +246,8 @@ kubectl -n logging get pods -l app=vector -o wide
 ```
 
 保持 `maxUnavailable: 1`。每个新 Pod 必须 Ready、版本正确、无重启且没有 VRL、metadata、buffer drop 错误，才允许继续下一节点。
+
+对从镜像包加载的节点，Kubelet 可能显示 `docker://sha256:...` 而不是 `docker-pullable://...@sha256:...`。验收时同时比较源节点拉取摘要、各节点镜像 `.Id`、Pod 内 `vector --version` 和 `vector validate`，不能只依赖一种 image ID 展示形式。
 
 ### 7.4 备份并升级 VictoriaLogs
 
@@ -280,9 +298,18 @@ Vector 的磁盘缓冲应吸收 VictoriaLogs 的短暂停机。恢复后确认 b
 
 服务本身低流量时，Grafana 没有日志是正常现象。验收要选择持续产生日志的服务，不能把业务静默误判为采集故障。
 
+不要只在滚动完成时看一次状态。以 1 分钟间隔连续观察至少 15 分钟，每次记录 DaemonSet `desired/ready/updated/available`、Pod 总重启数、Vector 发送/VRL/缓冲严重错误数，以及 VictoriaLogs 的写入、丢弃和 HTTP 错误计数。验收快照与升级前基线一起放入本次带时间戳的回滚目录。
+
 ## 9. 回滚
 
-Vector 回滚使用升级前导出的 ConfigMap 和 DaemonSet：
+Vector 回滚首选使用升级前的源清单：
+
+```bash
+kubectl apply -f /root/vector-maint-TIMESTAMP/source.before.yaml
+kubectl -n logging rollout status daemonset/vector --timeout=300s
+```
+
+若源清单不可用，再使用导出的 ConfigMap 和 DaemonSet：
 
 ```bash
 kubectl apply -f /root/vector-maint-TIMESTAMP/vector-config.yaml

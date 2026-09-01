@@ -78,6 +78,10 @@ validate_static() {
     "Grafana custom image uses the pinned build argument"
   require_literal "docker-compose/grafana/Dockerfile" 'plugins install victoriametrics-logs-datasource' \
     "Grafana plugin is installed at image build time"
+  require_literal "docker-compose/grafana/Dockerfile" 'ENV GF_PATHS_PLUGINS=/var/lib/grafana-plugins' \
+    "Grafana image stores plugins outside the mounted data directory"
+  require_literal "${grafana_compose}" 'GF_PATHS_PLUGINS=/var/lib/grafana-plugins' \
+    "Grafana runtime uses the image-baked plugin directory"
   require_literal "${grafana_datasource}" 'uid: victorialogs-ds' \
     "Grafana data source has a stable UID"
   require_literal "${grafana_datasource}" 'maxLines: 2000' \
@@ -196,10 +200,18 @@ validate_runtime() {
       --build-arg "VICTORIALOGS_PLUGIN_VERSION=${plugin_version}" \
       -t vvg-grafana:config-validation \
       docker-compose/grafana
-    plugin_list="$(docker run --rm --entrypoint grafana \
-      vvg-grafana:config-validation cli plugins ls)"
+    temp_dir="$(mktemp -d)"
+    trap "rm -rf -- '${temp_dir}'" EXIT
+    chmod 0777 "${temp_dir}"
+    plugin_list="$(docker run --rm \
+      -v "${temp_dir}:/var/lib/grafana" \
+      --entrypoint grafana \
+      vvg-grafana:config-validation \
+      cli --pluginsDir /var/lib/grafana-plugins plugins ls)"
+    rm -rf "${temp_dir}"
+    trap - EXIT
     if grep -Fq "victoriametrics-logs-datasource @ ${plugin_version}" <<<"${plugin_list}"; then
-      pass "Grafana image contains VictoriaLogs plugin ${plugin_version}"
+      pass "Grafana image exposes VictoriaLogs plugin ${plugin_version} with a mounted data directory"
     else
       printf '%s\n' "${plugin_list}" >&2
       printf 'Grafana image does not contain the expected VictoriaLogs plugin version\n' >&2

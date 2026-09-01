@@ -167,6 +167,8 @@ victoriametrics-logs-datasource: 0.31.0
 
 不要在生产 Compose 中设置运行时在线插件安装。插件下载失败可能在旧目录已移除、新目录未就绪时阻塞 Grafana 启动。
 
+对 bind mount `/var/lib/grafana` 的部署，预装插件必须位于数据挂载之外，本仓库固定使用 `/var/lib/grafana-plugins` 和 `GF_PATHS_PLUGINS`。否则 bind mount 会遮住镜像构建阶段写入 `/var/lib/grafana/plugins` 的插件。
+
 ### 5.2 在受控机器构建
 
 ```bash
@@ -177,7 +179,8 @@ docker build \
   -t vvg-grafana:13.2.0-plugin0.31.0 .
 
 docker run --rm --entrypoint grafana \
-  vvg-grafana:13.2.0-plugin0.31.0 cli plugins ls
+  vvg-grafana:13.2.0-plugin0.31.0 \
+  cli --pluginsDir /var/lib/grafana-plugins plugins ls
 ```
 
 生产服务器无法访问插件站点时，在有代理的受控工作机完成构建并推送私有仓库。生产启动只拉取已验证镜像。
@@ -218,6 +221,8 @@ docker run -d --name grafana-upgrade-test \
 ```
 
 必须确认：数据库 migration 完成、插件签名有效、数据源注册、`/api/health` 正常、没有 panic/fatal/migration failed。
+
+SQLite 升级启动时可能出现 info 级 `database is locked` 并自动重试。只有同时满足以下条件才可判定为已恢复的短暂竞争：migration 明确完成、健康和数据源 API 均为 200、容器无重启，且后续至少 5 分钟没有新的 lock retry。若计数持续增长或出现 error/fatal，不得继续切换。
 
 ### 5.5 正式切换
 

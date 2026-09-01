@@ -42,6 +42,24 @@ imagePullSecrets:
 
 不要使用 `latest` 或未验证的浮动 tag。升级前在每个节点用临时 Pod 验证私库拉取和 `vector --version`，验证后删除临时 Pod。
 
+老旧 Docker 节点在升级前还要检查实际 Docker RootDir 和容器日志链接。同一集群的节点可能分别使用 `/var/lib/docker` 和数据盘路径，升级时不能未经核对就删除旧 DaemonSet 中的 runtime 挂载：
+
+```bash
+docker info --format 'root={{.DockerRootDir}}'
+readlink -f /var/lib/docker
+readlink -f "/var/log/containers/$(ls /var/log/containers | head -n 1)"
+```
+
+在每个目标节点上预拉取镜像，避免 DaemonSet 更新到一半才因节点无法访问镜像仓库而停在 `ImagePullBackOff`。Docker 19 默认可能不支持 `docker manifest inspect`，不应把它作为唯一摘要验证方式：
+
+```bash
+docker pull timberio/vector:0.58.0-alpine
+docker image inspect timberio/vector:0.58.0-alpine \
+  --format 'id={{.Id}} digests={{json .RepoDigests}} size={{.Size}}'
+```
+
+若个别节点无法访问仓库，首选修复私库交付。受控维护窗口内也可从已验证节点导出镜像，通过内网传输后 `docker load`。必须校验传输包 SHA-256，并比较所有节点的镜像 `.Id`。`docker load` 后 `RepoDigests` 为空是可能的，因此同时保留源节点的拉取摘要证据。镜像包验证后立即删除，不在命令、文档或传输文件中嵌入凭据。
+
 ### 过滤范围
 
 模板默认排除 `kube-system`、`monitoring`、`logging` namespace，以及常见 sidecar。按实际 namespace 和标签调整：

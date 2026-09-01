@@ -4,6 +4,8 @@
 
 本目录使用自定义镜像在构建阶段安装插件。生产容器启动时不会联网安装或更新插件，避免插件下载卡住后 Grafana 无法监听。
 
+预装插件位于 `/var/lib/grafana-plugins`，并通过 `GF_PATHS_PLUGINS` 显式启用。不要把插件烘焙到 `/var/lib/grafana/plugins`：Compose 会把持久化目录 bind mount 到 `/var/lib/grafana`，从而遮住镜像中该路径的内容。
+
 ## 1. 构建插件镜像
 
 在可访问 Grafana 插件仓库的受控机器执行：
@@ -20,7 +22,8 @@ docker run --rm --entrypoint grafana \
   vvg-grafana:13.2.0-plugin0.31.0 server -v
 
 docker run --rm --entrypoint grafana \
-  vvg-grafana:13.2.0-plugin0.31.0 cli plugins ls
+  vvg-grafana:13.2.0-plugin0.31.0 \
+  cli --pluginsDir /var/lib/grafana-plugins plugins ls
 ```
 
 生产使用私有仓库时，在维护窗口前完成 `tag`、`push`、`pull` 和镜像摘要核对，再把 `.env` 的 `GRAFANA_IMAGE` 改为私有镜像完整名称。不要使用 `latest`。
