@@ -62,17 +62,34 @@ VictoriaLogs 升级或重建前需要优雅停止并等待存储刷盘。不要�
 
 ### 性能调优
 
-对于高负载环境，可以在 `docker-compose.yml` 中添加性能参数：
+Compose 默认使用已验证的查询控制基线：
 
-```yaml
-command:
-  - '--storageDataPath=/victoria-logs-data'
-  - '--httpListenAddr=:9428'
-  - '--retentionPeriod=180d'
-  - '--memory.allowedPercent=80'        # 允许使用更多内存
-  - '--search.maxQueryDuration=60s'     # 最大查询时间
-  - '--search.maxConcurrentRequests=16' # 并发查询数
+```dotenv
+VICTORIALOGS_CPUS=3.0
+VICTORIALOGS_MEMORY_LIMIT=5g
+VL_SEARCH_MAX_CONCURRENT_REQUESTS=4
+VL_SEARCH_MAX_QUEUE_DURATION=1m
+VL_DEFAULT_PARALLEL_READERS=1
+VL_SEARCH_MAX_QUERY_DURATION=2m
+VL_SEARCH_SLOW_QUERY_DURATION=8s
 ```
+
+该参考规格来自 4 核主机上的单节点部署。查询并发 4 已覆盖 Grafana 同时发出的日志列表和日志量请求；并发上限并不是越大越快，超过 CPU 能力会增加上下文切换和尾延迟。
+
+先观察以下指标：
+
+```bash
+curl -fsS http://127.0.0.1:9428/metrics | grep -E \
+  '^(vl_concurrent_select_capacity|vl_concurrent_select_current|vl_concurrent_select_limit_reached_total|vl_concurrent_select_limit_timeout_total|vl_slow_queries_total) '
+```
+
+只有同时满足以下条件时才逐步提高 `VL_SEARCH_MAX_CONCURRENT_REQUESTS`：
+
+1. `limit_reached_total` 或 `limit_timeout_total` 在业务查询期间持续增长。
+2. 容器 CPU 没有长期接近上限，内存和磁盘仍有明确余量。
+3. 缩小 Grafana 默认时间范围、限制返回行数和优化 LogsQL 后仍存在排队。
+
+每次只增加一个小档位并复测 P95/P99。若触顶计数为 0，提高并发不会解决浏览器取消、错误查询语法或网络问题。
 
 ## API 使用
 

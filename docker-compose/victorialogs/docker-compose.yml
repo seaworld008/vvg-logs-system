@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   victorialogs:
     image: ${DOCKER_REGISTRY}/victoriametrics/victoria-logs:${VICTORIALOGS_VERSION}
@@ -7,6 +5,8 @@ services:
     restart: always
     stop_signal: SIGINT
     stop_grace_period: 2m
+    cpus: ${VICTORIALOGS_CPUS}
+    mem_limit: ${VICTORIALOGS_MEMORY_LIMIT}
     ports:
       - "${VICTORIALOGS_PORT}:9428"
     volumes:
@@ -19,6 +19,11 @@ services:
       - '--retentionPeriod=${VICTORIALOGS_RETENTION}'
       - '--loggerFormat=json'
       - '--loggerOutput=stderr'
+      - '--search.maxConcurrentRequests=${VL_SEARCH_MAX_CONCURRENT_REQUESTS}'
+      - '--search.maxQueueDuration=${VL_SEARCH_MAX_QUEUE_DURATION}'
+      - '--defaultParallelReaders=${VL_DEFAULT_PARALLEL_READERS}'
+      - '--search.maxQueryDuration=${VL_SEARCH_MAX_QUERY_DURATION}'
+      - '--search.logSlowQueryDuration=${VL_SEARCH_SLOW_QUERY_DURATION}'
     networks:
       - vvg-monitoring
     logging:
