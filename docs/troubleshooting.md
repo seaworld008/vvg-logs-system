@@ -2,6 +2,8 @@
 
 本文档提供 VVG 日志收集系统的通用故障排查方法。具体服务的详细故障排查请参考各服务目录下的 README.md 文件。
 
+日志出现“长时间没有、随后批量涌入”时，不要先调大 VictoriaLogs 或日志轮转文件。请直接使用 [Vector -> VictoriaLogs 延迟、批量涌入与升级运行手册](vector-victorialogs-latency-runbook.md)，按源文件、Vector、VictoriaLogs、Grafana 四层定位。
+
 ## 🔍 快速诊断
 
 ### 系统整体检查
@@ -42,6 +44,29 @@ curl -X POST "http://VICTORIALOGS_IP:9428/select/logsql/query" \
 ```
 
 ## 🚨 常见问题
+
+### 日志断续、延迟后批量出现
+
+先比较 VictoriaLogs `_time` 与 `_msg` 中应用日志时间：
+
+```bash
+curl -fsSG 'http://VICTORIALOGS_HOST:9428/select/logsql/query' \
+  --data-urlencode 'query=container:="SERVICE_NAME"' \
+  --data-urlencode 'start=START_RFC3339' \
+  --data-urlencode 'end=END_RFC3339' \
+  --data-urlencode 'limit=100'
+```
+
+重点检查：
+
+- 显式 `exclude_paths_glob_patterns` 是否重新加入 `**/*.gz` 和 `**/*.tmp`。
+- 快速轮转环境的 `glob_minimum_cooldown_ms` 是否仍为默认 60 秒。
+- 是否使用 `oldest_first: true` 导致旧文件阻塞当前日志。
+- 是否存在 `string!(.kubernetes.container_name)` 空字段错误。
+- 是否使用 `rewrite_timestamp` 把旧日志改写成当前时间。
+- VictoriaLogs 写入错误、写入延迟和磁盘是否真的异常。
+
+推荐基线见 `k8s-deployment/vector-k8s-containerd-cri.yaml`。正常低频 Java 日志可能等待最多约 3 秒多行收束加 1 秒批次，不应出现分钟级积压。
 
 ### 容器启动失败
 
@@ -109,13 +134,20 @@ deploy:
       memory: 4G
 ```
 
-2. **调整批处理大小**
+2. **调整批处理与可靠缓冲**
 ```yaml
 # Vector 配置
 batch:
-  max_bytes: 2097152
-  timeout_secs: 5
+  max_bytes: 1048576
+  max_events: 500
+  timeout_secs: 1
+buffer:
+  type: disk
+  max_size: 1073741824
+  when_full: block
 ```
+
+`memory + drop_newest` 会在 VictoriaLogs 维护或网络抖动时主动丢新日志，不适合作为生产日志的默认容错策略。
 
 3. **优化查询性能**
 ```yaml
@@ -146,6 +178,8 @@ docker-compose logs -f vector
 - **"permission denied"**: 文件权限问题  
 - **"no space left"**: 磁盘空间不足
 - **"out of memory"**: 内存不足
+- **"Failed to annotate event with pod metadata"**: Pod 已删除或元数据缓存缺失；升级到 Vector 0.58+ 并保持过滤条件空值安全
+- **"VRL condition execution failed: expected string, got null"**: 对可空字段使用了 `string!`，改为 `string(...) ?? ""`
 
 ## 🆘 获取支持
 
@@ -159,4 +193,4 @@ docker-compose logs -f vector
 - 系统信息 (OS, Docker 版本)
 - 错误日志
 - 配置文件
-- 复现步骤 
+- 复现步骤

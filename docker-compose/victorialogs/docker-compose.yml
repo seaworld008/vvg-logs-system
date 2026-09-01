@@ -5,6 +5,8 @@ services:
     image: ${DOCKER_REGISTRY}/victoriametrics/victoria-logs:${VICTORIALOGS_VERSION}
     container_name: victorialogs
     restart: always
+    stop_signal: SIGINT
+    stop_grace_period: 2m
     ports:
       - "${VICTORIALOGS_PORT}:9428"
     volumes:
@@ -19,12 +21,6 @@ services:
       - '--loggerOutput=stderr'
     networks:
       - vvg-monitoring
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9428/metrics || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
     logging:
       driver: json-file
       options:
@@ -34,4 +30,4 @@ services:
 networks:
   vvg-monitoring:
     driver: bridge
-    name: ${DOCKER_NETWORK} 
+    name: ${DOCKER_NETWORK}

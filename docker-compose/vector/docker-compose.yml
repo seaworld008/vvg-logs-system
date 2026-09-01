@@ -11,6 +11,7 @@ services:
       - TZ=${TIMEZONE}
       - VLS_ENDPOINT=${VLS_ENDPOINT}
       - HOSTNAME=${VECTOR_HOSTNAME}
+      - VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION=true
     volumes:
       - ./vector.yaml:/etc/vector/vector.yaml:ro
       - ${NGINX_LOG_PATH}:/var/log/nginx:ro
@@ -36,4 +37,4 @@ services:
 networks:
   vvg-monitoring:
     driver: bridge
-    name: ${DOCKER_NETWORK} 
+    name: ${DOCKER_NETWORK}

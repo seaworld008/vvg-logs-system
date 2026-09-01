@@ -2,6 +2,8 @@
 
 VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、存储、查询和可视化解决方案。
 
+当前验证基线：Vector `0.58.0`、VictoriaLogs `v1.52.0`。生产升级和日志“延迟后批量涌入”排查请先阅读 [专项运行手册](docs/vector-victorialogs-latency-runbook.md)。
+
 ## 🏗️ 系统架构
 
 ```
@@ -61,8 +63,8 @@ VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、�
 - 支持 Docker CRI 和 Containerd CRI
 - **Java多行日志增强**: 异常堆栈自动合并 ⭐
 - **双层多行处理**: 容器分割 + 应用层处理
-- **高性能缓冲**: 10倍容错缓冲区，1MB批处理
-- **gzip压缩传输**: 大幅减少网络带宽占用
+- **持久可靠缓冲**: 每节点 1GiB 磁盘缓冲，后端短时维护不主动丢新日志
+- **低延迟采集**: 5秒文件发现、活跃文件公平读取、1秒批次
 
 ### 部署步骤
 
@@ -223,13 +225,15 @@ kubectl logs -n logging -l app=vector --tail=50
 根据数据量调整:
 - **VictoriaLogs**: 内存限制和查询参数
 - **Vector**: 批处理大小和缓冲区配置
-  - Kubernetes版本已优化：1MB批处理 + 10K事件缓冲 + gzip压缩 ⭐
-  - 支持双重限制机制，先达到的条件触发批处理
+  - Kubernetes 版本：1MB/500事件批次 + 1秒超时 + 1GiB磁盘缓冲
+  - 显式排除 `.gz/.tmp`，避免快速轮转文件晚读后批量涌入
+  - 保留真实事件时间，不使用 `rewrite_timestamp` 掩盖积压
 - **Grafana**: 查询超时和缓存设置
 
 ## 📖 文档
 
 - [故障排查指南](docs/troubleshooting.md)
+- [Vector/VictoriaLogs 延迟排查与升级运行手册](docs/vector-victorialogs-latency-runbook.md)
 - [VictoriaLogs 部署说明](docker-compose/victorialogs/README.md)
 - [Grafana 部署说明](docker-compose/grafana/README.md)  
 - [Vector 部署说明](docker-compose/vector/README.md)

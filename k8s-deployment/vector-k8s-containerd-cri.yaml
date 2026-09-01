@@ -1,6 +1,6 @@
 ############################################
-# Vector K8S DaemonSet - Containerd CRI 官方最佳实践版本  
-# 基于官方文档：https://github.com/vectordotdev/vector
+# Vector K8S DaemonSet - Containerd CRI
+# Baseline: Vector 0.58.0
 ############################################
 apiVersion: v1
 kind: ConfigMap
@@ -9,88 +9,109 @@ metadata:
   namespace: logging
 data:
   vector.yaml: |
-    # 数据目录
     data_dir: "/var/lib/vector"
-    
-    # API
+
     api:
       enabled: true
       address: "0.0.0.0:8686"
-    
-    # 使用官方推荐的kubernetes_logs源
+
     sources:
       k8s_logs:
-        type: "kubernetes_logs"
-        # 官方推荐：自动处理多行日志合并
+        type: kubernetes_logs
         auto_partial_merge: true
-        # 只收集Java应用，通过标签过滤
-        extra_label_selector: "app!=fluentd,app!=vector"
-    
-    # 日志处理流水线
+        self_node_name: ${VECTOR_SELF_NODE_NAME}
+        insert_namespace_fields: false
+
+        # Rapidly rotated files must be discovered before the runtime compresses them.
+        glob_minimum_cooldown_ms: 5000
+        oldest_first: false
+        max_read_bytes: 65536
+        rotate_wait_secs: 300
+        delay_deletion_ms: 300000
+
+        extra_label_selector: 'app!=fluentd,app!=vector,app!=vector-log'
+        extra_field_selector: 'metadata.namespace!=kube-system,metadata.namespace!=monitoring,metadata.namespace!=logging'
+
+        # Explicit patterns replace Vector defaults. Always retain .gz and .tmp.
+        exclude_paths_glob_patterns:
+          - "**/*.gz"
+          - "**/*.tmp"
+          - "/var/log/pods/kube-system_*/*/*.log"
+          - "/var/log/pods/monitoring_*/*/*.log"
+          - "/var/log/pods/logging_*/*/*.log"
+          - "/var/log/pods/*/init-*/**"
+          - "/var/log/pods/*/wait-for-*/**"
+          - "/var/log/pods/*/sidecar/*.log"
+          - "/var/log/pods/*/istio-proxy/*.log"
+
     transforms:
-      # 1. 过滤健康检查日志
       filter_java_logs:
         type: filter
         inputs: [k8s_logs]
         condition: |
-          # 只排除明显的健康检查
-          !contains(string!(.message), "/actuator/health") &&
-          !contains(string!(.message), "/health")
+          message = string(.message) ?? ""
+          container_name = string(.kubernetes.container_name) ?? ""
+          !contains(message, "/actuator/health") &&
+          !contains(message, "/health") &&
+          container_name != "sidecar" &&
+          container_name != "istio-proxy"
 
-      # 2. Java多行日志增强处理
       enhance_multiline:
         type: reduce
         inputs: [filter_java_logs]
-        # 使用你提供的优化模式匹配Java日志
         group_by:
           - kubernetes.pod_name
           - kubernetes.container_name
-        # 识别新日志行的开始模式
         starts_when: |
-          match(string!(.message), r'^(\d{4}-\d{2}-\d{2}(?:T|\s)\d{2}:\d{2}:\d{2}|\b(INFO|WARN|DEBUG|ERROR|FATAL|TRACE)\b)')
-        # 3秒超时，确保异常堆栈及时输出
+          match(string(.message) ?? "", r'^(\d{4}-\d{2}-\d{2}(?:T|\s)\d{2}:\d{2}:\d{2}|\b(INFO|WARN|DEBUG|ERROR|FATAL|TRACE)\b)')
         expire_after_ms: 3000
-        # 合并策略：将多行合并为单条消息
         merge_strategies:
           message: concat_newline
 
-      # 3. 添加VictoriaLogs所需的_msg字段
       add_msg_field:
         type: remap
         inputs: [enhance_multiline]
         source: |
-          ._msg = .message
-    
-    # 输出
+          msg, err = string(.message)
+          if err != null { msg = "" }
+          msg = replace(msg, "\0", "")
+          .message = msg
+          ._msg = msg
+
+          caps, perr = parse_regex(msg, r'^\d{4}-\d{2}-\d{2}(?:T|\s)\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+(?P<lvl>TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\b')
+          if perr == null && caps != null {
+            .level = downcase(to_string(caps.lvl))
+          } else {
+            .level = "unknown"
+          }
+
     sinks:
-      # VictoriaLogs
       victorialogs:
         type: loki
         inputs: [add_msg_field]
-        endpoint: "http://172.18.151.163:9428"
+        endpoint: "${VLS_ENDPOINT}"
         path: /insert/loki/api/v1/push
+        out_of_order_action: accept
         labels:
-          job: "java-app"
+          job: java-app
           namespace: "{{ kubernetes.pod_namespace }}"
           pod: "{{ kubernetes.pod_name }}"
           container: "{{ kubernetes.container_name }}"
+          level: "{{ level }}"
         encoding:
           codec: json
-        # 优化批处理和缓冲配置（基于官方最佳实践）
         batch:
-          max_bytes: 1048576      # 1MB批大小，官方推荐
-          max_events: 500         # 双重限制，先达到的生效
-          timeout_secs: 5         # 5秒批超时
+          max_bytes: 1048576
+          max_events: 500
+          timeout_secs: 1
         buffer:
-          type: memory
-          max_events: 10000       # 10倍缓冲容量，提高容错率
-          when_full: drop_newest  # 缓冲满时丢弃最新数据
-        # 启用gzip压缩，大幅减少网络带宽
-        compression: gzip
-        # 禁用健康检查避免400错误
+          type: disk
+          max_size: 1073741824
+          when_full: block
+        compression: none
         healthcheck: false
         request:
-          timeout_secs: 30
+          timeout_secs: 60
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -104,10 +125,7 @@ metadata:
   name: vector
 rules:
   - apiGroups: [""]
-    resources:
-      - namespaces
-      - nodes  
-      - pods
+    resources: ["namespaces", "nodes", "pods"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -131,6 +149,10 @@ metadata:
   labels:
     app: vector
 spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: vector
@@ -139,82 +161,95 @@ spec:
       labels:
         app: vector
     spec:
+      terminationGracePeriodSeconds: 120
       serviceAccountName: vector
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
+      # For a private mirror, add an imagePullSecrets entry here.
       containers:
-      - name: vector
-        image: registry.cn-shenzhen.aliyuncs.com/starsl/vector:0.41.1-alpine
-        env:
-        - name: VECTOR_SELF_NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: VECTOR_LOG
-          value: "warn"
-        - name: TZ
-          value: "Asia/Shanghai"
-        - name: PROCFS_ROOT
-          value: "/host/proc"
-        - name: SYSFS_ROOT
-          value: "/host/sys"
-        ports:
-        - name: api
-          containerPort: 8686
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "200m"
-          limits:
-            memory: "512Mi"
-            cpu: "1000m"
-        volumeMounts:
-        - name: config
-          mountPath: /etc/vector
-        - name: data
-          mountPath: /var/lib/vector
-        - name: var-log
-          mountPath: /var/log
-          readOnly: true
-        - name: run-containerd
-          mountPath: /run/containerd/containerd.sock
-          readOnly: true
-        - name: var-lib-containerd
-          mountPath: /var/lib/containerd
-          readOnly: true
-        - name: proc
-          mountPath: /host/proc
-          readOnly: true
-        - name: sys
-          mountPath: /host/sys
-          readOnly: true
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: api
-          initialDelaySeconds: 30
-          periodSeconds: 30
+        - name: vector
+          image: timberio/vector:0.58.0-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: VECTOR_SELF_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: VLS_ENDPOINT
+              value: "http://victorialogs.logging.svc.cluster.local:9428"
+            - name: VECTOR_LOG
+              value: warn
+            # Vector 0.57+ disables interpolation by default. Only controlled,
+            # non-secret Downward API and endpoint values are interpolated here.
+            - name: VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION
+              value: "true"
+            - name: TZ
+              value: Asia/Shanghai
+            - name: PROCFS_ROOT
+              value: /host/proc
+            - name: SYSFS_ROOT
+              value: /host/sys
+          ports:
+            - name: api
+              containerPort: 8686
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 200m
+            limits:
+              memory: 2Gi
+              cpu: "4"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vector
+            - name: data
+              mountPath: /var/lib/vector
+            - name: var-log
+              mountPath: /var/log
+              readOnly: true
+            - name: run-containerd
+              mountPath: /run/containerd/containerd.sock
+              readOnly: true
+            - name: var-lib-containerd
+              mountPath: /var/lib/containerd
+              readOnly: true
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: api
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: api
+            initialDelaySeconds: 30
+            periodSeconds: 30
       volumes:
-      - name: config
-        configMap:
-          name: vector-config
-      - name: data
-        hostPath:
-          path: /var/lib/vector
-          type: DirectoryOrCreate
-      - name: var-log
-        hostPath:
-          path: /var/log
-      - name: run-containerd
-        hostPath:
-          path: /run/containerd/containerd.sock
-          type: Socket
-      - name: var-lib-containerd
-        hostPath:
-          path: /var/lib/containerd
-      - name: proc
-        hostPath:
-          path: /proc
-      - name: sys
-        hostPath:
-          path: /sys
+        - name: config
+          configMap:
+            name: vector-config
+        - name: data
+          hostPath:
+            path: /var/lib/vector
+            type: DirectoryOrCreate
+        - name: var-log
+          hostPath:
+            path: /var/log
+        - name: run-containerd
+          hostPath:
+            path: /run/containerd/containerd.sock
+            type: Socket
+        - name: var-lib-containerd
+          hostPath:
+            path: /var/lib/containerd
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys
