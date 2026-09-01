@@ -4,6 +4,8 @@
 
 当前基线：Vector `0.58.0`。生产部署必须先阅读 [延迟排查与升级运行手册](../docs/vector-victorialogs-latency-runbook.md)。
 
+Grafana 查询卡顿和 VictoriaLogs 查询并发调优属于展示/存储层问题，使用 [Grafana/VictoriaLogs 查询性能与升级运行手册](../docs/grafana-victorialogs-query-performance-runbook.md)，不要通过修改 DaemonSet 掩盖前端取消或错误 LogsQL。
+
 ## 配置选择
 
 ```bash
@@ -66,6 +68,8 @@ exclude_paths_glob_patterns:
 ```
 
 显式设置 `exclude_paths_glob_patterns` 会覆盖 Vector 默认排除项，因此 `.gz` 和 `.tmp` 不能省略。高流量容器在默认 60 秒发现周期内可能已经轮转并压缩，最终表现为日志延迟后批量出现。
+
+这里的 5 秒属于 `kubernetes_logs` 在快速 CRI 轮转场景的实测基线。Docker Compose 使用普通 `file` source，其 Vector 0.58 默认发现周期已是 1 秒；两者不要机械地写成同一个值。
 
 ### Java 多行日志
 

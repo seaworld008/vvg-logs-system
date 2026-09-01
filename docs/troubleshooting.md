@@ -4,6 +4,8 @@
 
 日志出现“长时间没有、随后批量涌入”时，不要先调大 VictoriaLogs 或日志轮转文件。请直接使用 [Vector -> VictoriaLogs 延迟、批量涌入与升级运行手册](vector-victorialogs-latency-runbook.md)，按源文件、Vector、VictoriaLogs、Grafana 四层定位。
 
+Grafana 查询按钮转圈、账号间体验不一致或升级插件时，请使用 [Grafana/VictoriaLogs 查询性能与升级运行手册](grafana-victorialogs-query-performance-runbook.md)，先区分浏览器取消、查询语法、插件和后端执行时间。
+
 ## 🔍 快速诊断
 
 ### 系统整体检查
@@ -67,6 +69,22 @@ curl -fsSG 'http://VICTORIALOGS_HOST:9428/select/logsql/query' \
 - VictoriaLogs 写入错误、写入延迟和磁盘是否真的异常。
 
 推荐基线见 `k8s-deployment/vector-k8s-containerd-cri.yaml`。正常低频 Java 日志可能等待最多约 3 秒多行收束加 1 秒批次，不应出现分钟级积压。
+
+### Grafana 查询按钮持续转圈
+
+先检查 Grafana 请求日志：
+
+```bash
+docker logs --since 2h grafana 2>&1 | grep -E \
+  'path=/api/ds/query|context canceled|cannot parse|timeout|status=5[0-9][0-9]'
+```
+
+- `499/context canceled` 通常表示浏览器主动取消，不是 VictoriaLogs 查询超时。
+- `cannot parse query` 是 LogsQL 语法错误，提高并发无效。
+- 旧 Explore URL 的 `range` 会覆盖默认 15 分钟；重新打开空白 `/explore` 验证。
+- 用 VictoriaLogs `/select/logsql/query` 和 `/hits` 直接测量同一时间窗，区分前端和后端。
+
+详细指标、基准命令和升级回滚步骤见专项运行手册。
 
 ### 容器启动失败
 
@@ -149,13 +167,14 @@ buffer:
 
 `memory + drop_newest` 会在 VictoriaLogs 维护或网络抖动时主动丢新日志，不适合作为生产日志的默认容错策略。
 
-3. **优化查询性能**
-```yaml
-# VictoriaLogs 配置
-command:
-  - '--memory.allowedPercent=80'
-  - '--search.maxConcurrentRequests=16'
+3. **按指标调整查询并发**
+
+```bash
+curl -fsS http://VICTORIALOGS_HOST:9428/metrics | grep -E \
+  '^(vl_concurrent_select_capacity|vl_concurrent_select_current|vl_concurrent_select_limit_reached_total|vl_concurrent_select_limit_timeout_total|vl_slow_queries_total) '
 ```
+
+默认并发为 4。只有触顶/排队超时计数持续增长且 CPU、内存仍有余量时才逐档提高；计数为 0 时先修复时间范围、返回行数、LogsQL、浏览器取消或网络问题。
 
 ## 📝 日志分析
 
@@ -188,6 +207,7 @@ docker-compose logs -f vector
 - [VictoriaLogs 故障排查](../docker-compose/victorialogs/README.md#故障排查)
 - [Grafana 故障排查](../docker-compose/grafana/README.md#故障排查)  
 - [Vector 故障排查](../docker-compose/vector/README.md#故障排查)
+- [Grafana/VictoriaLogs 查询性能与升级运行手册](grafana-victorialogs-query-performance-runbook.md)
 
 如问题仍无法解决，请在 GitHub 上创建 Issue，并提供：
 - 系统信息 (OS, Docker 版本)
