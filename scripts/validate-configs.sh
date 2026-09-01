@@ -61,6 +61,10 @@ validate_static() {
     "Grafana version is pinned"
   require_literal "${grafana_env}" 'VICTORIALOGS_PLUGIN_VERSION=0.31.0' \
     "VictoriaLogs Grafana plugin version is pinned"
+  require_literal "docker-compose/grafana/Dockerfile" 'FROM grafana/grafana:${GRAFANA_VERSION}' \
+    "Grafana custom image uses the pinned build argument"
+  require_literal "docker-compose/grafana/Dockerfile" 'plugins install victoriametrics-logs-datasource' \
+    "Grafana plugin is installed at image build time"
   require_literal "${grafana_datasource}" 'uid: victorialogs-ds' \
     "Grafana data source has a stable UID"
   require_literal "${grafana_datasource}" 'maxLines: 2000' \
@@ -147,6 +151,9 @@ validate_runtime() {
   local temp_dir
   local manifest
   local extracted
+  local grafana_version
+  local plugin_version
+  local plugin_list
 
   command -v docker >/dev/null 2>&1 || {
     printf 'docker is required for --runtime validation\n' >&2
@@ -161,6 +168,26 @@ validate_runtime() {
       config --quiet
     pass "${component} Compose configuration expands"
   done
+
+  if [[ "${VVG_SKIP_GRAFANA_BUILD:-0}" == "1" ]]; then
+    printf 'SKIP: Grafana image build explicitly disabled by VVG_SKIP_GRAFANA_BUILD=1\n'
+  else
+    grafana_version="$(sed -n 's/^GRAFANA_VERSION=//p' docker-compose/grafana/env.example)"
+    plugin_version="$(sed -n 's/^VICTORIALOGS_PLUGIN_VERSION=//p' docker-compose/grafana/env.example)"
+    docker build \
+      --build-arg "GRAFANA_VERSION=${grafana_version}" \
+      --build-arg "VICTORIALOGS_PLUGIN_VERSION=${plugin_version}" \
+      -t vvg-grafana:config-validation \
+      docker-compose/grafana
+    plugin_list="$(docker run --rm vvg-grafana:config-validation grafana cli plugins ls)"
+    if grep -Fq "victoriametrics-logs-datasource @ ${plugin_version}" <<<"${plugin_list}"; then
+      pass "Grafana image contains VictoriaLogs plugin ${plugin_version}"
+    else
+      printf '%s\n' "${plugin_list}" >&2
+      printf 'Grafana image does not contain the expected VictoriaLogs plugin version\n' >&2
+      return 1
+    fi
+  fi
 
   validate_vector_file "${repo_root}/docker-compose/vector/vector.yaml"
   pass "Docker Vector configuration validates"
