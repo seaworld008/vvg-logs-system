@@ -2,18 +2,16 @@ apiVersion: 1
 
 datasources:
   - name: VictoriaLogs
+    uid: victorialogs-ds
     type: victoriametrics-logs-datasource
     access: proxy
-    url: http://172.18.151.163:9428  # 修改为实际的 VictoriaLogs 服务器地址
+    url: ${VICTORIALOGS_URL}
     isDefault: true
+    editable: false
     jsonData:
-      maxLines: 5000
-      httpHeaderName1: 'X-Scope-OrgID'
-    secureJsonData:
-      httpHeaderValue1: '1'
-    editable: true
+      maxLines: 2000
+      timeout: 60
 
-# 配置说明:
-# 1. 将 url 中的 IP 地址改为实际的 VictoriaLogs 服务器 IP
-# 2. 如果 VictoriaLogs 在同一台机器上，可以使用 localhost:9428
-# 3. 如果使用 Docker 网络，可以使用容器名: victorialogs:9428 
+# VICTORIALOGS_URL 由 Compose 环境变量注入。
+# 跨主机部署使用可路由的内网地址，不要使用 Grafana 容器内的 localhost。
+# 同一 Docker 网络可使用 http://victorialogs:9428。
