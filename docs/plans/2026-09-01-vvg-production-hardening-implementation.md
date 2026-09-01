@@ -34,7 +34,7 @@ GF_EXPLORE_DEFAULTTIMEOFFSET=15m
 victorialogs-ds
 maxLines: 2000
 search.maxConcurrentRequests
-glob_minimum_cooldown_ms: 5000
+glob_minimum_cooldown_ms: 1000
 timeout_secs: 1
 when_full: block
 ```
@@ -195,13 +195,12 @@ For every file source, add the appropriate verified options:
 exclude:
   - "**/*.gz"
   - "**/*.tmp"
-glob_minimum_cooldown_ms: 5000
+glob_minimum_cooldown_ms: 1000
 oldest_first: false
 max_read_bytes: 65536
-rotate_wait_secs: 300
 ```
 
-Confirm every key against Vector 0.58 documentation before editing.
+Confirm every key against Vector 0.58 documentation before editing. Keep the file source's default unlimited rotated-file handle lifetime; a forced 300-second limit can truncate slow catch-up.
 
 **Step 2: Reduce bounded latency**
 

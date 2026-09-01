@@ -64,10 +64,11 @@
 ### 6.1 Docker Compose
 
 - 保持 Vector `0.58.0-alpine` 和 10 GiB 磁盘缓冲。
-- 文件发现周期改为 5 秒，显式排除 `.gz` 和 `.tmp`，公平读取活跃文件并保留轮转读取窗口。
+- 普通 file source 显式使用 Vector 0.58 的 1 秒发现周期，排除 `.gz` 和 `.tmp`，并公平读取活跃文件；轮转句柄保留官方默认的无限等待，避免慢追赶被截断。
 - Java 多行收束为 3 秒，发送批次超时为 1 秒。
 - 保持 `when_full: block` 和真实时间戳，不以丢新日志或改写时间掩盖积压。
 - 默认移除 console sink，避免业务日志再次写入容器 stdout；调试使用 `vector tap`。
+- Vector API 无认证，宿主机端口默认只绑定 `127.0.0.1`。
 
 ### 6.2 Kubernetes
 

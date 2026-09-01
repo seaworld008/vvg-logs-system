@@ -82,14 +82,16 @@ validate_static() {
   require_literal "${victorialogs_compose}" '--search.logSlowQueryDuration=${VL_SEARCH_SLOW_QUERY_DURATION}' \
     "VictoriaLogs slow-query logging is parameterized"
 
-  require_literal "${vector_config}" 'glob_minimum_cooldown_ms: 5000' \
-    "Docker Vector discovers files every five seconds"
+  require_literal "${vector_config}" 'glob_minimum_cooldown_ms: 1000' \
+    "Docker Vector discovers files every second"
   require_literal "${vector_config}" 'timeout_secs: 1' \
     "Docker Vector bounds batch latency to one second"
   require_literal "${vector_config}" 'when_full: block' \
     "Docker Vector applies lossless buffer backpressure"
   forbid_regex "${vector_config}" '^  console:' \
     "Docker Vector does not duplicate business logs to stdout"
+  require_literal "docker-compose/vector/env.example" 'VECTOR_API_BIND=127.0.0.1' \
+    "Docker Vector API binds to host loopback by default"
 
   if rg -n --glob '*.yaml' --glob '*.yml' 'drop_newest|rewrite_timestamp' \
       docker-compose k8s-deployment >/dev/null; then
