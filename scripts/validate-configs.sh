@@ -75,6 +75,7 @@ validate_static() {
     "Provisioned Grafana data source is immutable"
 
   password_value="$(sed -n 's/^GRAFANA_ADMIN_PASSWORD=//p' "${grafana_env}" | head -n 1)"
+  password_value="${password_value%$'\r'}"
   if [[ "${password_value}" == "CHANGE_ME_BEFORE_DEPLOY" ]]; then
     pass "Grafana example contains only a non-secret password placeholder"
   else
@@ -123,6 +124,7 @@ extract_vector_config() {
   local output="$2"
 
   awk '
+    { sub(/\r$/, "") }
     found && /^---$/ { exit }
     found { sub(/^    /, ""); print }
     $0 == "  vector.yaml: |" { found=1 }
@@ -174,6 +176,8 @@ validate_runtime() {
   else
     grafana_version="$(sed -n 's/^GRAFANA_VERSION=//p' docker-compose/grafana/env.example)"
     plugin_version="$(sed -n 's/^VICTORIALOGS_PLUGIN_VERSION=//p' docker-compose/grafana/env.example)"
+    grafana_version="${grafana_version%$'\r'}"
+    plugin_version="${plugin_version%$'\r'}"
     docker build \
       --build-arg "GRAFANA_VERSION=${grafana_version}" \
       --build-arg "VICTORIALOGS_PLUGIN_VERSION=${plugin_version}" \
