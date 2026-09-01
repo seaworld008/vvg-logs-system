@@ -84,6 +84,12 @@ curl -fsS http://127.0.0.1:9428/select/logsql/stream_field_values \
 
 后续变量依赖前面的变量：命名空间变化后，微服务列表会刷新；微服务变化后，Pod 和级别列表会刷新。
 
+所有 Query/Multi 变量都显式设置 `allValue: "*"`。否则 Grafana 可能把 All 展开成全部服务和全部 Pod 的长列表，导致请求体膨胀并增加插件与 Grafana 的处理负担。正确展开结果应类似：
+
+```logsql
+container:in(*) pod:in(*) level:in(*)
+```
+
 ### 4.2 可折叠区域
 
 - `日志概览`：包含匹配日志数和错误/严重日志数。
@@ -372,6 +378,7 @@ _stream_fields=cluster,namespace,container,pod,level
 - 默认时间窗保持 15 分钟。
 - 自动刷新保持关闭，由用户按需开启。
 - 单次日志明细限制 2000 行。
+- Multi 变量的 All 必须使用自定义值 `*`，禁止枚举全部服务和 Pod。
 - 优先按流字段缩小范围，再执行 message 正则过滤。
 - 不要把默认范围改为 1 小时或 24 小时。
 - 不要因为 UI 转圈就直接扩大 VictoriaLogs 并发；先区分浏览器取消、插件错误、反向代理和后端执行时间。
@@ -395,6 +402,8 @@ _stream_fields=cluster,namespace,container,pod,level
 3. 数据源 UID 是否存在。
 4. URL 是否带有旧的 `var-message=*`。
 5. 变量是否展开成过长或互相冲突的 `in(...)` 条件。
+
+如果 All 被展开成几十个服务或 Pod，确认对应变量的 `allValue` 仍为 `*`。
 
 ### 14.2 折叠趋势后日志也消失
 
@@ -477,6 +486,7 @@ git diff --check
 - `jwxt-prod` 默认命名空间。
 - namespace/container/message 查询能力。
 - message 的 `.*` 默认值。
+- 四个 Query/Multi 变量的 `allValue: "*"`。
 - 三个折叠行边界。
 - 紧凑统计面板。
 - Explore 固定颜色。

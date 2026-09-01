@@ -126,6 +126,11 @@ validate_static() {
     "Grafana log search dashboard supports message regex search"
   require_literal "${grafana_dashboard}" '"value": ".*"' \
     "Grafana log search dashboard uses a valid all-message regexp"
+  if [[ "$(grep -Fc '"allValue": "*"' "${grafana_dashboard}")" == "4" ]]; then
+    pass "Grafana log search dashboard bounds all multi-value filters"
+  else
+    fail "Grafana log search dashboard must set four allValue wildcards"
+  fi
   require_literal "${grafana_dashboard}" '"valueSize": 28' \
     "Grafana log search dashboard uses compact stat values"
   require_literal "${grafana_dashboard}" '"fixedColor": "#1F78C1"' \
