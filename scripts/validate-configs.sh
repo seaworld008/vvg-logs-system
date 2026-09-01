@@ -16,6 +16,25 @@ fail() {
   failures=$((failures + 1))
 }
 
+validate_json_file() {
+  local path="$1"
+  local description="$2"
+
+  if command -v python3 >/dev/null 2>&1 \
+      && python3 -m json.tool "${path}" >/dev/null 2>&1; then
+    pass "${description}"
+  elif command -v python >/dev/null 2>&1 \
+      && python -m json.tool "${path}" >/dev/null 2>&1; then
+    pass "${description}"
+  elif command -v node >/dev/null 2>&1 \
+      && node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' \
+        "${path}" >/dev/null 2>&1; then
+    pass "${description}"
+  else
+    fail "${description} (${path} is invalid or no JSON parser is available)"
+  fi
+}
+
 require_literal() {
   local path="$1"
   local value="$2"
@@ -44,6 +63,7 @@ validate_static() {
   local grafana_compose="docker-compose/grafana/docker-compose.yml"
   local grafana_env="docker-compose/grafana/env.example"
   local grafana_datasource="docker-compose/grafana/datasources/victorialogs.yaml"
+  local grafana_dashboard="docker-compose/grafana/dashboards/vvg-log-search.json"
   local victorialogs_compose="docker-compose/victorialogs/docker-compose.yml"
   local vector_config="docker-compose/vector/vector.yaml"
   local password_value
@@ -90,6 +110,33 @@ validate_static() {
     "Grafana data source timeout is explicit"
   require_literal "${grafana_datasource}" 'editable: false' \
     "Provisioned Grafana data source is immutable"
+  validate_json_file "${grafana_dashboard}" \
+    "Grafana log search dashboard is valid JSON"
+  require_literal "${grafana_dashboard}" '"uid": "vvg-log-search"' \
+    "Grafana log search dashboard has a stable UID"
+  require_literal "${grafana_dashboard}" '"from": "now-15m"' \
+    "Grafana log search dashboard defaults to 15 minutes"
+  require_literal "${grafana_dashboard}" '"value": "jwxt-prod"' \
+    "Grafana log search dashboard defaults to jwxt-prod"
+  require_literal "${grafana_dashboard}" '"field": "namespace"' \
+    "Grafana log search dashboard filters by namespace"
+  require_literal "${grafana_dashboard}" '"field": "container"' \
+    "Grafana log search dashboard filters by service container"
+  require_literal "${grafana_dashboard}" 'message:~$message' \
+    "Grafana log search dashboard supports message regex search"
+  require_literal "${grafana_dashboard}" '"value": ".*"' \
+    "Grafana log search dashboard uses a valid all-message regexp"
+  require_literal "${grafana_dashboard}" '"valueSize": 28' \
+    "Grafana log search dashboard uses compact stat values"
+  require_literal "${grafana_dashboard}" '"fixedColor": "#1F78C1"' \
+    "Grafana log search dashboard pins the Explore debug color"
+  require_literal "${grafana_dashboard}" '"fixedColor": "#E24D42"' \
+    "Grafana log search dashboard pins the Explore error color"
+  if [[ "$(grep -Fc '"type": "row"' "${grafana_dashboard}")" == "3" ]]; then
+    pass "Grafana log search dashboard has three collapse boundaries"
+  else
+    fail "Grafana log search dashboard must have exactly three row panels"
+  fi
 
   password_value="$(sed -n 's/^GRAFANA_ADMIN_PASSWORD=//p' "${grafana_env}" | head -n 1)"
   password_value="${password_value%$'\r'}"
