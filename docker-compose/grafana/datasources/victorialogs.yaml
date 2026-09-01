@@ -9,7 +9,7 @@ datasources:
     isDefault: true
     editable: false
     jsonData:
-      maxLines: 2000
+      maxLines: 500
       timeout: 60
 
 # VICTORIALOGS_URL 由 Compose 环境变量注入。

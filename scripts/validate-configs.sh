@@ -102,9 +102,17 @@ validate_static() {
     "Grafana image stores plugins outside the mounted data directory"
   require_literal "${grafana_compose}" 'GF_PATHS_PLUGINS=/var/lib/grafana-plugins' \
     "Grafana runtime uses the image-baked plugin directory"
+  require_literal "${grafana_compose}" 'cpus: ${GRAFANA_CPU_LIMIT}' \
+    "Grafana CPU usage is bounded"
+  require_literal "${grafana_compose}" 'mem_limit: ${GRAFANA_MEMORY_LIMIT}' \
+    "Grafana memory usage is bounded"
+  require_literal "${grafana_compose}" 'pids_limit: ${GRAFANA_PIDS_LIMIT}' \
+    "Grafana process count is bounded"
+  require_literal "${grafana_compose}" 'curl --max-time 5 -fsS' \
+    "Grafana health probe bounds its HTTP wait"
   require_literal "${grafana_datasource}" 'uid: victorialogs-ds' \
     "Grafana data source has a stable UID"
-  require_literal "${grafana_datasource}" 'maxLines: 2000' \
+  require_literal "${grafana_datasource}" 'maxLines: 500' \
     "Grafana log result size is bounded"
   require_literal "${grafana_datasource}" 'timeout: 60' \
     "Grafana data source timeout is explicit"
@@ -124,6 +132,8 @@ validate_static() {
     "Grafana log search dashboard filters by service container"
   require_literal "${grafana_dashboard}" 'message:~$message' \
     "Grafana log search dashboard supports message regex search"
+  require_literal "${grafana_dashboard}" '"maxLines": 500' \
+    "Grafana log details bound plugin response memory"
   require_literal "${grafana_dashboard}" '"value": ".*"' \
     "Grafana log search dashboard uses a valid all-message regexp"
   if [[ "$(grep -Fc '"allValue": "*"' "${grafana_dashboard}")" == "4" ]]; then

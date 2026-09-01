@@ -40,6 +40,7 @@ cp env.example .env
 - `GRAFANA_ADMIN_PASSWORD`：生产强密码，不能保留示例占位符。
 - `GRAFANA_IMAGE`：已提前构建并验证的插件镜像。
 - `GRAFANA_PORT`：对外监听端口。
+- `GRAFANA_CPU_LIMIT`、`GRAFANA_MEMORY_LIMIT`、`GRAFANA_PIDS_LIMIT`：限制单个 Grafana 故障拖垮同机监控服务。4 核、15 GiB 的共享主机基线为 `2.0`、`4g`、`512`。
 
 创建持久目录并启动：
 
@@ -55,8 +56,10 @@ curl -fsS http://127.0.0.1:3000/api/health
 - Explore 新页面默认查询最近 15 分钟。
 - 用户可通过时间选择器查询其他范围。
 - 旧书签或旧标签页 URL 中的 `range` 会覆盖全局默认值，应重新打开空白 Explore 页面验证。
-- 单次默认最多返回 2000 行，数据源请求超时为 60 秒。
+- 单次默认最多返回 500 行，数据源请求超时为 60 秒；完整匹配数量由统计面板提供。
 - provisioning 数据源固定 UID `victorialogs-ds` 且不可在 UI 中修改，避免账号之间配置漂移。
+- Query/Multi 变量的 All 固定展开为 `*`，禁止枚举全部服务和 Pod。
+- Grafana 容器使用 CPU、内存和 PID 上限；健康探测本身最多等待 5 秒。
 
 查询转圈不等于后端并发不足。先检查浏览器请求、Grafana 日志和 VictoriaLogs 指标，详细流程见 [Grafana/VictoriaLogs 查询性能与升级运行手册](../../docs/grafana-victorialogs-query-performance-runbook.md)。
 

@@ -457,7 +457,7 @@
           },
           "editorMode": "code",
           "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level message:~$message",
-          "maxLines": 2000,
+          "maxLines": 500,
           "queryType": "instant",
           "refId": "A"
         }
@@ -670,6 +670,6 @@
   "timezone": "browser",
   "title": "VVG 生产日志检索大屏",
   "uid": "vvg-log-search",
-  "version": 3,
+  "version": 4,
   "weekStart": "monday"
 }

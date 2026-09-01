@@ -251,7 +251,7 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
   - Kubernetes 版本：1MB/500事件批次 + 1秒超时 + 1GiB磁盘缓冲
   - 显式排除 `.gz/.tmp`，避免快速轮转文件晚读后批量涌入
   - 保留真实事件时间，不使用 `rewrite_timestamp` 掩盖积压
-- **Grafana**: Explore 默认15分钟、最多2000行、60秒数据源超时
+- **Grafana**: Explore 默认15分钟、最多500行、60秒数据源超时
 
 ## 📖 文档
 
