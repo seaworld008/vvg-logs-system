@@ -176,8 +176,8 @@ docker build \
   --build-arg VICTORIALOGS_PLUGIN_VERSION=0.31.0 \
   -t vvg-grafana:13.2.0-plugin0.31.0 .
 
-docker run --rm vvg-grafana:13.2.0-plugin0.31.0 \
-  grafana cli plugins ls
+docker run --rm --entrypoint grafana \
+  vvg-grafana:13.2.0-plugin0.31.0 cli plugins ls
 ```
 
 生产服务器无法访问插件站点时，在有代理的受控工作机完成构建并推送私有仓库。生产启动只拉取已验证镜像。

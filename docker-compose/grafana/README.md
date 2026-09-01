@@ -16,8 +16,11 @@ docker build \
   --build-arg VICTORIALOGS_PLUGIN_VERSION=0.31.0 \
   -t vvg-grafana:13.2.0-plugin0.31.0 .
 
-docker run --rm vvg-grafana:13.2.0-plugin0.31.0 \
-  grafana server -v
+docker run --rm --entrypoint grafana \
+  vvg-grafana:13.2.0-plugin0.31.0 server -v
+
+docker run --rm --entrypoint grafana \
+  vvg-grafana:13.2.0-plugin0.31.0 cli plugins ls
 ```
 
 生产使用私有仓库时，在维护窗口前完成 `tag`、`push`、`pull` 和镜像摘要核对，再把 `.env` 的 `GRAFANA_IMAGE` 改为私有镜像完整名称。不要使用 `latest`。

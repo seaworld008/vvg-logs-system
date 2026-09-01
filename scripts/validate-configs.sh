@@ -196,7 +196,8 @@ validate_runtime() {
       --build-arg "VICTORIALOGS_PLUGIN_VERSION=${plugin_version}" \
       -t vvg-grafana:config-validation \
       docker-compose/grafana
-    plugin_list="$(docker run --rm vvg-grafana:config-validation grafana cli plugins ls)"
+    plugin_list="$(docker run --rm --entrypoint grafana \
+      vvg-grafana:config-validation cli plugins ls)"
     if grep -Fq "victoriametrics-logs-datasource @ ${plugin_version}" <<<"${plugin_list}"; then
       pass "Grafana image contains VictoriaLogs plugin ${plugin_version}"
     else
