@@ -1,278 +1,185 @@
-# Vector K8S 部署配置
+# Vector Kubernetes 部署
 
-本目录包含用于在 Kubernetes 环境中收集 Java 应用多行日志并发送到 VictoriaLogs 的 Vector 配置文件。
+本目录提供 Docker CRI 和 Containerd CRI 两套 DaemonSet 模板，用于收集 Java 标准输出日志并写入 VictoriaLogs。
 
-## 配置文件说明
+当前基线：Vector `0.58.0`。生产部署必须先阅读 [延迟排查与升级运行手册](../docs/vector-victorialogs-latency-runbook.md)。
 
-### 1. vector-k8s-docker-cri.yaml
-适用于使用 **Docker** 作为容器运行时的 K8S 集群。
-
-### 2. vector-k8s-containerd-cri.yaml
-适用于使用 **Containerd** 作为容器运行时的 K8S 集群。
-
-## 主要特性
-
-- ✅ **官方最佳实践**：使用 `kubernetes_logs` 源，支持自动多行日志合并
-- ✅ **双层多行处理**：容器运行时层 + Java应用层多行日志处理
-- ✅ **Java异常堆栈**：自动合并Java异常堆栈为单条记录
-- ✅ **智能日志识别**：支持时间戳和日志级别开头的日志格式
-- ✅ **VictoriaLogs 集成**：使用 Loki API 发送日志，包含 `_msg` 字段
-- ✅ **K8S 元数据**：自动提取 namespace、pod、container 等信息
-- ✅ **健康检查过滤**：自动过滤 `/actuator/health` 等健康检查日志
-- ✅ **高可用性**：内存缓冲、批处理、重试机制
-- ✅ **资源优化**：合理的资源限制和性能配置
-
-## 部署步骤
-
-### 1. 修改 VictoriaLogs 地址
-
-编辑配置文件中的 VictoriaLogs 端点地址：
-
-```yaml
-sinks:
-  victorialogs:
-    endpoint: "http://172.18.151.163:9428"  # 替换为您的 VictoriaLogs IP
-```
-
-### 2. 部署 Vector
-
-根据您的容器运行时选择相应的配置文件：
+## 配置选择
 
 ```bash
-# Docker CRI
-kubectl apply -f vector-k8s-docker-cri.yaml
+kubectl get nodes -o custom-columns=NAME:.metadata.name,RUNTIME:.status.nodeInfo.containerRuntimeVersion
+```
 
-# Containerd CRI  
+- `containerd://...`：使用 `vector-k8s-containerd-cri.yaml`
+- `docker://...`：使用 `vector-k8s-docker-cri.yaml`
+
+两个模板的采集、转换、缓冲和滚动策略一致，仅宿主机 runtime 挂载不同。
+
+## 生产前必改
+
+### VictoriaLogs endpoint
+
+修改 DaemonSet 中的 `VLS_ENDPOINT`：
+
+```yaml
+- name: VLS_ENDPOINT
+  value: "http://victorialogs.logging.svc.cluster.local:9428"
+```
+
+如果 VictoriaLogs 在集群外，使用内网地址并先从工作节点验证可达性。
+
+### 私有镜像
+
+先按运行手册把 `timberio/vector:0.58.0-alpine` 镜像到私有仓库，再替换：
+
+```yaml
+image: registry.example.com/observability/timberio/vector:0.58.0-alpine
+imagePullSecrets:
+  - name: registry-secret
+```
+
+不要使用 `latest` 或未验证的浮动 tag。升级前在每个节点用临时 Pod 验证私库拉取和 `vector --version`，验证后删除临时 Pod。
+
+### 过滤范围
+
+模板默认排除 `kube-system`、`monitoring`、`logging` namespace，以及常见 sidecar。按实际 namespace 和标签调整：
+
+```yaml
+extra_label_selector: 'app!=fluentd,app!=vector,app!=vector-log'
+extra_field_selector: 'metadata.namespace!=kube-system,metadata.namespace!=monitoring,metadata.namespace!=logging'
+```
+
+这些 selector 是“排除条件”，不会自动保证只收集 Java。需要严格白名单时，应使用稳定的业务标签或 namespace 设计并先做覆盖率检查。
+
+## 关键设计
+
+### 快速轮转文件
+
+```yaml
+glob_minimum_cooldown_ms: 5000
+oldest_first: false
+max_read_bytes: 65536
+rotate_wait_secs: 300
+exclude_paths_glob_patterns:
+  - "**/*.gz"
+  - "**/*.tmp"
+```
+
+显式设置 `exclude_paths_glob_patterns` 会覆盖 Vector 默认排除项，因此 `.gz` 和 `.tmp` 不能省略。高流量容器在默认 60 秒发现周期内可能已经轮转并压缩，最终表现为日志延迟后批量出现。
+
+### Java 多行日志
+
+处理分两层：
+
+1. `auto_partial_merge` 合并 runtime 因单行长度限制拆分的 CRI 片段。
+2. `reduce` 按 Pod 和 container 合并 Java 异常堆栈。
+
+```yaml
+group_by:
+  - kubernetes.pod_name
+  - kubernetes.container_name
+starts_when: |
+  match(string(.message) ?? "", r'^(\d{4}-\d{2}-\d{2}(?:T|\s)\d{2}:\d{2}:\d{2}|\b(INFO|WARN|DEBUG|ERROR|FATAL|TRACE)\b)')
+expire_after_ms: 3000
+```
+
+不要把 `expire_after_ms` 直接降为几百毫秒，否则较慢输出的堆栈可能被拆开。低频日志的正常可见延迟约为 3 秒收束加 1 秒批次。
+
+### 空字段安全
+
+Pod 删除后元数据可能暂时不完整。不要对 `.kubernetes.*` 使用 `string!`：
+
+```vrl
+message = string(.message) ?? ""
+container_name = string(.kubernetes.container_name) ?? ""
+```
+
+Vector 0.58 能从日志路径回退恢复基础 Pod 元数据，但转换层仍需防御可空字段。
+
+### 时间戳和缓冲
+
+```yaml
+out_of_order_action: accept
+batch:
+  timeout_secs: 1
+buffer:
+  type: disk
+  max_size: 1073741824
+  when_full: block
+```
+
+VictoriaLogs 支持历史事件。`rewrite_timestamp` 会把旧日志伪装成新日志，掩盖真实积压。持久磁盘缓冲可吸收 VictoriaLogs 的短时重启；`memory + drop_newest` 会主动丢日志。
+
+## 离线验证
+
+```bash
+kubectl apply --dry-run=server -f vector-k8s-containerd-cri.yaml
+```
+
+还必须提取 ConfigMap 中的 `vector.yaml`，使用目标镜像编译 VRL 和完整拓扑：
+
+```bash
+docker run --rm \
+  -e VECTOR_SELF_NODE_NAME=validation-node \
+  -e VLS_ENDPOINT=http://victorialogs.example:9428 \
+  -e VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION=true \
+  -v "$PWD/vector.yaml:/etc/vector/vector.yaml:ro" \
+  timberio/vector:0.58.0-alpine \
+  validate --no-environment /etc/vector/vector.yaml
+```
+
+Vector 0.57+ 默认关闭环境变量插值。模板仅为受控的节点名和 endpoint 显式开启插值，不要把秘密放进普通环境变量。
+
+## 部署与滚动
+
+先导出当前对象：
+
+```bash
+kubectl -n logging get configmap vector-config -o yaml > vector-config.before.yaml
+kubectl -n logging get daemonset vector -o yaml > vector-daemonset.before.yaml
+```
+
+部署：
+
+```bash
 kubectl apply -f vector-k8s-containerd-cri.yaml
+kubectl -n logging rollout status daemonset/vector --timeout=300s
 ```
 
-### 3. 验证部署
+模板固定 `maxUnavailable: 1` 和 120 秒退出宽限期。不要一次删除所有 Vector Pod。
+
+## 验收
 
 ```bash
-# 检查 Pod 状态
-kubectl get pods -n logging -l app=vector
+kubectl -n logging get pods -l app=vector -o wide
+kubectl -n logging top pod -l app=vector
 
-# 查看 Vector 日志
-kubectl logs -n logging -l app=vector --tail=50
-
-# 检查是否有错误
-kubectl logs -n logging -l app=vector | grep -i error
+for pod in $(kubectl -n logging get pod -l app=vector -o name); do
+  kubectl -n logging exec "${pod}" -- vector --version
+  kubectl -n logging exec "${pod}" -- \
+    vector validate --no-environment /etc/vector/vector.yaml
+  kubectl -n logging logs "${pod}" --since=5m 2>&1 \
+    | grep -E 'Failed to annotate|VRL condition execution failed|buffer.*(full|drop)|request.*(fail|error)|ERROR' \
+    || true
+done
 ```
 
-## 核心配置说明
+最终还要验证：
 
-### 日志源配置
+- VictoriaLogs `/health` 为 `200`，写入计数持续增加且写入错误为零。
+- 升级前历史时间窗仍可查询。
+- 最新 `_time` 与 Java 行首时间一致。
+- 近期仍存在包含换行的 `_msg`，证明 Java 多行未被拆散。
+- 磁盘 buffer 在后端恢复后稳定或下降。
 
-使用官方推荐的 `kubernetes_logs` 源：
+仅 Pod Running 或本地配置校验通过，不能作为端到端验收。
 
-```yaml
-sources:
-  k8s_logs:
-    type: "kubernetes_logs"
-    # 自动处理多行日志合并（官方最佳实践）
-    auto_partial_merge: true
-    # 过滤系统组件日志，只收集应用日志
-    extra_label_selector: "app!=fluentd,app!=vector"
-```
-
-### 日志处理流程
-
-```yaml
-transforms:
-  # 1. 过滤健康检查日志
-  filter_java_logs:
-    type: filter
-    condition: |
-      !contains(string!(.message), "/actuator/health") &&
-      !contains(string!(.message), "/health")
-
-  # 2. Java多行日志增强处理
-  enhance_multiline:
-    type: reduce
-    # 按pod和container分组处理
-    group_by:
-      - kubernetes.pod_name
-      - kubernetes.container_name
-    # 识别Java日志开始行（时间戳或日志级别）
-    starts_when: |
-      match(string!(.message), r'^(\d{4}-\d{2}-\d{2}(?:T|\s)\d{2}:\d{2}:\d{2}|\b(INFO|WARN|DEBUG|ERROR|FATAL|TRACE)\b)')
-    # 3秒超时确保异常堆栈及时输出
-    expire_after_ms: 3000
-    # 换行连接策略，保持堆栈可读性
-    merge_strategies:
-      message: concat_newline
-
-  # 3. 添加 VictoriaLogs 所需的 _msg 字段
-  add_msg_field:
-    type: remap
-    source: |
-      ._msg = .message
-```
-
-### VictoriaLogs 输出配置
-
-```yaml
-sinks:
-  victorialogs:
-    type: loki
-    endpoint: "http://172.18.151.163:9428"
-    path: /insert/loki/api/v1/push
-    labels:
-      job: "java-app"
-      namespace: "{{ kubernetes.pod_namespace }}"
-      pod: "{{ kubernetes.pod_name }}"
-      container: "{{ kubernetes.container_name }}"
-    # 高性能缓冲配置（基于官方最佳实践）
-    batch:
-      max_bytes: 1048576     # 1MB 批大小，官方推荐
-      max_events: 500        # 双重限制，先达到的生效
-      timeout_secs: 5        # 5秒批超时
-    buffer:
-      type: memory
-      max_events: 10000      # 10倍容错缓冲，提高可靠性
-      when_full: drop_newest # 缓冲满时丢弃最新数据
-    compression: gzip        # gzip压缩，大幅减少网络带宽
-    healthcheck: false       # 禁用健康检查避免400错误
-```
-
-## 如何判断使用哪个配置文件
+## 回滚
 
 ```bash
-# 检查节点的容器运行时
-kubectl get nodes -o wide
-
-# 或者检查具体节点
-kubectl describe node <node-name> | grep "Container Runtime"
+kubectl apply -f vector-config.before.yaml
+kubectl apply -f vector-daemonset.before.yaml
+kubectl -n logging rollout status daemonset/vector --timeout=300s
 ```
 
-- 如果显示 `docker://`，使用 `vector-k8s-docker-cri.yaml`
-- 如果显示 `containerd://`，使用 `vector-k8s-containerd-cri.yaml`
-
-## 监控和验证
-
-### 检查日志收集
-
-```bash
-# 查看 Vector 处理的日志数量
-kubectl logs -n logging -l app=vector | grep "Events received"
-
-# 检查发送到 VictoriaLogs 的状态  
-kubectl logs -n logging -l app=vector | grep victorialogs
-```
-
-### 查询 VictoriaLogs
-
-在 VictoriaLogs Web 界面中查询：
-- **日志查询**: `job="java-app"`
-- **按 namespace 过滤**: `namespace="your-namespace"`
-- **按 pod 过滤**: `pod=~"your-app-.*"`
-
-## 常见问题
-
-### 1. Pod 启动报错 "VECTOR_SELF_NODE_NAME env var is not set"
-**解决方案**: 确保配置文件中包含以下环境变量：
-```yaml
-env:
-- name: VECTOR_SELF_NODE_NAME
-  valueFrom:
-    fieldRef:
-      fieldPath: spec.nodeName
-```
-
-### 2. 日志中出现 "missing _msg field" 错误  
-**解决方案**: 配置文件已包含 `add_msg_field` transform，确保部署的是最新版本。
-
-### 3. Pod 出现端口冲突 "Address in use (os error 98)"
-**原因**: 节点上已经运行了其他 Vector 实例（如 Docker 版本）
-**解决方案**: 停止节点上的其他 Vector 服务，或修改端口配置
-
-### 4. 400 Bad Request 错误
-**解决方案**: 配置中已设置 `healthcheck: false` 来避免此问题
-
-### 5. 小文件警告 "file too small to fingerprint"  
-**说明**: 这是正常警告，不影响功能，可忽略
-
-## 更新配置
-
-```bash
-# 更新配置
-kubectl apply -f vector-k8s-docker-cri.yaml
-
-# 重启 Pod（可选，ConfigMap 会自动重载）
-kubectl delete pods -n logging -l app=vector
-```
-
-## 资源配置
-
-默认资源限制：
-```yaml
-resources:
-  requests:
-    memory: "128Mi"
-    cpu: "200m"
-  limits:
-    memory: "512Mi"  
-    cpu: "1000m"
-```
-
-根据集群规模和日志量可适当调整。
-
-## Java 多行日志处理
-
-### 双层多行日志处理机制
-
-配置采用双层多行日志处理架构：
-
-1. **容器运行时层** (`kubernetes_logs.auto_partial_merge`)
-   - 处理Docker/containerd的16KB日志分割问题
-   - 自动合并被容器运行时拆分的日志行
-
-2. **应用层** (`reduce` transform)
-   - 处理Java应用真正的多行日志（异常堆栈、多行消息）
-   - 使用精确的正则表达式识别日志边界
-
-### 支持的 Java 日志格式
-
-自动识别以下格式的日志开始行：
-
-```
-# 时间戳格式
-2025-01-15 10:30:45,123 ERROR [main] com.example.App - Error occurred
-2025-01-15T10:30:45.123 INFO  [http-nio-8080-exec-1] - Processing request
-
-# 日志级别开头
-INFO  2025-01-15 10:30:45 - Application started
-ERROR Exception in thread "main"
-WARN  Configuration file not found
-```
-
-### 异常堆栈处理示例
-
-**输入**（多行）：
-```
-2025-01-15 10:30:45,123 ERROR [main] com.example.Service - Database connection failed
-java.sql.SQLException: Connection refused
-    at java.sql.DriverManager.getConnection(DriverManager.java:664)
-    at com.example.Service.connect(Service.java:45)
-    at com.example.App.main(App.java:12)
-Caused by: java.net.ConnectException: Connection refused
-    at java.net.PlainSocketImpl.socketConnect(PlainSocketImpl.java:113)
-```
-
-**输出**（合并为单条）：
-```
-2025-01-15 10:30:45,123 ERROR [main] com.example.Service - Database connection failed
-java.sql.SQLException: Connection refused
-    at java.sql.DriverManager.getConnection(DriverManager.java:664)
-    at com.example.Service.connect(Service.java:45)
-    at com.example.App.main(App.java:12)
-Caused by: java.net.ConnectException: Connection refused
-    at java.net.PlainSocketImpl.socketConnect(PlainSocketImpl.java:113)
-```
-
-### 配置参数说明
-
-- **`group_by`**: 按pod和container分组，确保不同容器日志不串扰
-- **`starts_when`**: 正则表达式识别新日志行开始
-- **`expire_after_ms: 3000`**: 3秒超时，确保异常堆栈及时输出
-- **`concat_newline`**: 保持原有换行格式，便于阅读
+回滚后重复完整验收。不要删除 `/var/lib/vector` checkpoint 或 buffer 来“解决”积压，这会破坏恢复位置或丢失尚未发送的事件。
