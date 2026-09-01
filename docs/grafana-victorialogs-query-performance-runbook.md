@@ -253,6 +253,29 @@ docker compose --env-file .env up -d --no-deps --force-recreate grafana
 
 验证容器健康、内部 `/api/health`、公网入口、插件版本和一条 15 分钟真实查询。不要用服务器 loopback 成功代替外部网络验证。
 
+### 5.6 旧版 Docker Compose 兼容边界
+
+执行前必须用目标服务器上的实际 Compose 二进制验证候选文件。旧版 `docker-compose 1.25.x` 可能不支持现代无版本 Compose，也可能拒绝 `mem_limit`、`pids_limit` 或 `healthcheck.start_period`；不要通过反复猜测版本字段直接修改正式文件。
+
+若暂时不能升级 Compose：
+
+1. 保留该主机已验证的 Compose 文件版本，只提交它能够解析的健康探测、只读 provisioning 挂载和日志轮转配置。
+2. 重建 Grafana 后使用 Docker runtime 设置边界：
+
+   ```bash
+   docker update \
+     --cpus 2 \
+     --memory 4g \
+     --memory-swap 4g \
+     --pids-limit 512 \
+     grafana
+   ```
+
+3. `memory-swap` 与 `memory` 相等表示不提供额外 Swap。应用后必须通过 `docker inspect` 核对 `NanoCpus`、`Memory`、`MemorySwap` 和 `PidsLimit`。
+4. 普通 container restart 会保留 runtime 限制；`--force-recreate` 会创建新容器并丢失这些限制，所以每次重建后都必须重新执行并验证。长期方案仍是升级到仓库验证过的 Compose 版本。
+
+测试环境 Dashboard 应从生产 JSON 派生，只调整标题、环境标签、集群显示名和默认 namespace。UID、查询表达式、All 通配值、500 行上限、折叠结构、级别颜色和 message 高亮逻辑必须保持一致，避免维护两套行为不同的大屏。
+
 ## 6. 回滚
 
 Grafana 13 会迁移 SQLite 和统一存储。回滚时：
