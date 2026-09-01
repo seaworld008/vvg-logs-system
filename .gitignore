@@ -1,0 +1,13 @@
+# Local secrets and deployment-specific settings
+.env
+**/.env
+服务器信息.txt
+**/服务器信息.txt
+
+# Runtime data must never be committed
+**/grafana-data/
+**/victoria-logs-data/
+**/vector_data/
+
+# Local PR drafting artifact
+PR_BODY.md

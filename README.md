@@ -27,7 +27,7 @@ VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、�
 - **🔧 易部署**: Docker Compose 一键部署，vector支持kubernetes分布式部署
 - **📊 可视化**: Grafana 提供强大的日志查询和可视化功能
 - **🔍 智能解析**: 自动识别 Nginx 和 Java 日志格式
-- **🔄 高可用**: 支持多实例部署和负载均衡
+- **🔄 可靠传输**: 持久磁盘缓冲、背压和可回滚升级，后端短时维护不主动丢新日志
 
 ## 📋 支持的日志格式
 
@@ -156,6 +156,21 @@ curl http://127.0.0.1:8686/health
 kubectl get pods -n logging
 kubectl logs -n logging -l app=vector --tail=50
 ```
+
+### 配置校验
+
+提交或部署前运行：
+
+```bash
+# 不需要 Docker，检查固定版本、危险默认值、凭据和关键基线
+bash scripts/validate-configs.sh --static
+
+# 需要 Docker；展开三套 Compose、构建 Grafana 插件镜像，
+# 并用 Vector 0.58 实际校验 Docker 与两套 K8S 配置
+bash scripts/validate-configs.sh --runtime
+```
+
+Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验。`.env`、`服务器信息.txt` 和运行数据目录不得提交到仓库。
 
 ## 📁 项目结构
 

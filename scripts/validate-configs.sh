@@ -47,6 +47,19 @@ validate_static() {
   local victorialogs_compose="docker-compose/victorialogs/docker-compose.yml"
   local vector_config="docker-compose/vector/vector.yaml"
   local password_value
+  local tracked_sensitive
+
+  require_literal ".gitignore" '**/.env' \
+    "Deployment .env files are ignored"
+  require_literal ".gitignore" '**/服务器信息.txt' \
+    "Local server credential files are ignored"
+  tracked_sensitive="$(git ls-files | grep -E '(^|/)(\.env|服务器信息\.txt)$' || true)"
+  if [[ -n "${tracked_sensitive}" ]]; then
+    printf '%s\n' "${tracked_sensitive}" >&2
+    fail "Local deployment credentials must not be tracked"
+  else
+    pass "No local deployment credential files are tracked"
+  fi
 
   forbid_regex "${grafana_compose}" 'GF_(INSTALL_PLUGINS|PLUGINS_PREINSTALL)' \
     "Grafana startup has no online plugin installation"
