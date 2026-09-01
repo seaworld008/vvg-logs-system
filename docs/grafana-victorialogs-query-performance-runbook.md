@@ -59,6 +59,7 @@ Grafana 主机当时只有 4 核、15 GiB 内存且无 Swap，Grafana 与 Victor
 
 - 四个 Query/Multi 变量必须设置 `allValue: "*"`。
 - 数据源和大屏日志明细默认最多返回 500 行；统计数量不受该展示上限影响。
+- Dashboard 文本变量使用 `_msg:$message` word filter 和默认值 `*`，让插件正确引用中文并返回 `searchWords` 以支持匹配词高亮；不要使用 `message:~$message` 或未引用的 `| $message`。
 - Grafana 默认限制为 2 CPU、4 GiB 内存和 512 PID；需要调整时必须记录共享主机余量。
 - 健康探测自身最多等待 5 秒，避免故障时无限堆积探测进程。
 - Nginx 的 60 秒超时是保护边界，不应通过提高超时掩盖慢查询。

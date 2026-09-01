@@ -130,12 +130,18 @@ validate_static() {
     "Grafana log search dashboard filters by namespace"
   require_literal "${grafana_dashboard}" '"field": "container"' \
     "Grafana log search dashboard filters by service container"
-  require_literal "${grafana_dashboard}" 'message:~$message' \
-    "Grafana log search dashboard supports message regex search"
+  require_literal "${grafana_dashboard}" '_msg:$message' \
+    "Grafana log search dashboard uses the highlight-aware word filter"
+  forbid_regex "${grafana_dashboard}" '\| \$message' \
+    "Grafana log search dashboard avoids unquoted pipe variables"
+  forbid_regex "${grafana_dashboard}" 'message:~\$message' \
+    "Grafana log search dashboard avoids regexp template interpolation"
   require_literal "${grafana_dashboard}" '"maxLines": 500' \
     "Grafana log details bound plugin response memory"
-  require_literal "${grafana_dashboard}" '"value": ".*"' \
-    "Grafana log search dashboard uses a valid all-message regexp"
+  require_literal "${grafana_dashboard}" '"value": "*"' \
+    "Grafana log search dashboard uses the word-filter all value"
+  require_literal "${grafana_dashboard}" '"query": "*"' \
+    "Grafana message textbox defaults to all logs"
   if [[ "$(grep -Fc '"allValue": "*"' "${grafana_dashboard}")" == "4" ]]; then
     pass "Grafana log search dashboard bounds all multi-value filters"
   else

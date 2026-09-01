@@ -22,7 +22,7 @@ docker-compose/grafana/dashboards/vvg-log-search.json
 
 1. 新打开时直接查询最近 15 分钟、`jwxt-prod` 命名空间。
 2. 不需要编辑 LogsQL，即可选择命名空间、微服务、Pod 和级别。
-3. 可以在 `message` 字段中进行模糊或正则搜索。
+3. 可以在日志正文中进行关键词或短语搜索，并高亮匹配内容。
 4. 日志概览和趋势可独立折叠，折叠后保留尽可能大的日志阅读区域。
 5. 自动刷新默认关闭，避免多人打开时持续扫描高流量日志。
 6. 所有级别颜色固定与 Grafana Explore 一致，不随序列顺序变化。
@@ -80,7 +80,7 @@ curl -fsS http://127.0.0.1:9428/select/logsql/stream_field_values \
 | 微服务 | `service` | Query/Multi | All | `container` 字段值 |
 | Pod | `pod` | Query/Multi | All | `pod` 字段值 |
 | 级别 | `level` | Query/Multi | All | `level` 字段值 |
-| message 模糊搜索 | `message` | Text box | `.*` | 用户输入 |
+| message 模糊搜索 | `_msg` | Text box | `*` | 用户输入 |
 
 后续变量依赖前面的变量：命名空间变化后，微服务列表会刷新；微服务变化后，Pod 和级别列表会刷新。
 
@@ -124,42 +124,38 @@ Grafana 的展开行会包含它后面的面板，直到遇到下一个 `row` �
 所有面板复用以下基础条件：
 
 ```logsql
-namespace:=$namespace container:=$service pod:=$pod level:=$level message:~$message
+namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message
 ```
 
 ### 5.1 匹配日志数
 
 ```logsql
-namespace:=$namespace container:=$service pod:=$pod level:=$level message:~$message
+namespace:=$namespace container:=$service pod:=$pod level:=$level
+_msg:$message
 | stats count() as matching_logs
 ```
 
 ### 5.2 错误/严重日志数
 
 ```logsql
-namespace:=$namespace container:=$service pod:=$pod level:=$level message:~$message
-level:in("error","critical")
+namespace:=$namespace container:=$service pod:=$pod level:=$level level:in("error","critical")
+_msg:$message
 | stats count() as error_logs
 ```
 
 ### 5.3 按级别趋势
 
 ```logsql
-namespace:=$namespace container:=$service pod:=$pod level:=$level message:~$message
+namespace:=$namespace container:=$service pod:=$pod level:=$level
+_msg:$message
 | stats by (level) count() as logs
 ```
 
-### 5.4 message 默认值为什么是 `.*`
+### 5.4 message 为什么使用 word filter
 
-`message` 是 Grafana Text box 变量，并通过正则过滤器 `message:~$message` 使用。
+`message` 是 Grafana Text box 变量，通过官方推荐的 `_msg:$message` word filter 使用。默认值 `*` 表示不限制日志正文；插件会对变量值进行引用和转义，并把搜索词写入 Grafana 的 `searchWords` 元数据，使 Logs 面板高亮匹配内容。
 
-不要把默认值设置为 `*`。在当前 Grafana/插件组合中，`*` 会被插值成 `(*)`，VictoriaLogs 将返回：
-
-```text
-invalid regexp: missing argument to repetition operator: *
-```
-
-`.*` 才是合法的全匹配正则。普通文字（例如 `BaseAop`）也可以直接输入进行包含匹配。
+不要使用 `message:~$message`，也不要直接写 `| $message`。前者不能稳定生成高亮元数据并会让 `*` 变成非法正则；后者会把未加引号的中文直接放进 LogsQL。需要高级正则时，在 Explore 中编写明确的 LogsQL，例如 `_msg:~"request-[0-9]+"`。
 
 ## 6. 导入前检查
 
@@ -305,7 +301,7 @@ jq -n \
 - 时间：Last 15 minutes。
 - 命名空间：`jwxt-prod`。
 - 微服务、Pod、级别：All。
-- message：`.*`。
+- message：`*`。
 - 自动刷新：Off。
 
 旧书签、旧标签页和 URL 中的 `var-*`、`from`、`to` 参数会覆盖 Dashboard 默认值。
@@ -325,18 +321,18 @@ jq -n \
 
 ```bash
 curl -fsS http://VICTORIALOGS_HOST:9428/select/logsql/query \
-  --data-urlencode 'query=namespace:in("jwxt-prod") container:in(*) pod:in(*) level:in(*) message:~".*"' \
+  --data-urlencode 'query=namespace:in("jwxt-prod") container:in(*) pod:in(*) level:in(*) _msg:*' \
   -d 'start=15m' \
   -d 'end=now' \
   -d 'limit=1'
 
 curl -fsS http://VICTORIALOGS_HOST:9428/select/logsql/stats_query \
-  --data-urlencode 'query=namespace:in("jwxt-prod") container:in(*) pod:in(*) level:in(*) message:~".*" | stats count() as matching_logs' \
+  --data-urlencode 'query=namespace:in("jwxt-prod") container:in(*) pod:in(*) level:in(*) _msg:* | stats count() as matching_logs' \
   -d 'start=15m' \
   -d 'end=now'
 
 curl -fsS http://VICTORIALOGS_HOST:9428/select/logsql/stats_query_range \
-  --data-urlencode 'query=namespace:in("jwxt-prod") container:in(*) pod:in(*) level:in(*) message:~".*" | stats by (level) count() as logs' \
+  --data-urlencode 'query=namespace:in("jwxt-prod") container:in(*) pod:in(*) level:in(*) _msg:* | stats by (level) count() as logs' \
   -d 'start=15m' \
   -d 'end=now' \
   -d 'step=1m'
@@ -379,7 +375,7 @@ _stream_fields=cluster,namespace,container,pod,level
 - 自动刷新保持关闭，由用户按需开启。
 - 单次日志明细限制 500 行；需要更多上下文时先选择微服务或 Pod 缩小范围。
 - Multi 变量的 All 必须使用自定义值 `*`，禁止枚举全部服务和 Pod。
-- 优先按流字段缩小范围，再执行 message 正则过滤。
+- 优先按流字段缩小范围，再执行 message word filter；高级正则放到 Explore。
 - 不要把默认范围改为 1 小时或 24 小时。
 - 不要因为 UI 转圈就直接扩大 VictoriaLogs 并发；先区分浏览器取消、插件错误、反向代理和后端执行时间。
 
@@ -398,7 +394,7 @@ _stream_fields=cluster,namespace,container,pod,level
 依次检查：
 
 1. 面板状态提示中的完整 LogsQL 错误。
-2. `message` 是否为 `.*`，而不是 `*` 或空值。
+2. `message` 是否为 `*`，而不是旧版 `.*` 或空值。
 3. 数据源 UID 是否存在。
 4. URL 是否带有旧的 `var-message=*`。
 5. 变量是否展开成过长或互相冲突的 `in(...)` 条件。
@@ -485,7 +481,7 @@ git diff --check
 - 最近 15 分钟默认范围。
 - `jwxt-prod` 默认命名空间。
 - namespace/container/message 查询能力。
-- message 的 `.*` 默认值。
+- message 的 `*` 默认值和 word filter 查询。
 - 四个 Query/Multi 变量的 `allValue: "*"`。
 - 三个折叠行边界。
 - 紧凑统计面板。
