@@ -1,7 +1,7 @@
 # Grafana/VictoriaLogs 查询性能与升级运行手册
 
-> 验证基线：Grafana `13.2.0-ubuntu`、VictoriaLogs 数据源插件 `0.31.0`、VictoriaLogs `v1.52.0`  
-> 最后验证：2026-09-01  
+> 验证基线：Grafana `13.2.0-ubuntu`、VictoriaLogs 数据源插件 `0.31.0`、VictoriaLogs `v1.52.0`
+> 最后验证：2026-09-01
 > 适用场景：Grafana Explore -> VictoriaLogs 单节点
 
 本文来自一次真实生产排查和升级。核心结论是：Grafana 查询按钮持续转圈不等于 VictoriaLogs 查询慢，也不等于并发上限太低。必须先区分浏览器取消、Grafana/插件错误、LogsQL 语法、网络和 VictoriaLogs 执行时间。
