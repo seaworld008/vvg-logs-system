@@ -3,6 +3,9 @@ services:
     image: ${GRAFANA_IMAGE}
     container_name: grafana
     restart: always
+    cpus: ${GRAFANA_CPU_LIMIT}
+    mem_limit: ${GRAFANA_MEMORY_LIMIT}
+    pids_limit: ${GRAFANA_PIDS_LIMIT}
     stop_grace_period: 1m
     ports:
       - "${GRAFANA_PORT}:3000"
@@ -26,7 +29,7 @@ services:
     networks:
       - vvg-monitoring
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl --max-time 5 -fsS http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 6

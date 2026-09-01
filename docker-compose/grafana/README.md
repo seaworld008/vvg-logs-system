@@ -40,6 +40,7 @@ cp env.example .env
 - `GRAFANA_ADMIN_PASSWORD`：生产强密码，不能保留示例占位符。
 - `GRAFANA_IMAGE`：已提前构建并验证的插件镜像。
 - `GRAFANA_PORT`：对外监听端口。
+- `GRAFANA_CPU_LIMIT`、`GRAFANA_MEMORY_LIMIT`、`GRAFANA_PIDS_LIMIT`：限制单个 Grafana 故障拖垮同机监控服务。4 核、15 GiB 的共享主机基线为 `2.0`、`4g`、`512`。
 
 创建持久目录并启动：
 
@@ -55,12 +56,30 @@ curl -fsS http://127.0.0.1:3000/api/health
 - Explore 新页面默认查询最近 15 分钟。
 - 用户可通过时间选择器查询其他范围。
 - 旧书签或旧标签页 URL 中的 `range` 会覆盖全局默认值，应重新打开空白 Explore 页面验证。
-- 单次默认最多返回 2000 行，数据源请求超时为 60 秒。
+- 单次默认最多返回 500 行，数据源请求超时为 60 秒；完整匹配数量由统计面板提供。
 - provisioning 数据源固定 UID `victorialogs-ds` 且不可在 UI 中修改，避免账号之间配置漂移。
+- Query/Multi 变量的 All 固定展开为 `*`，禁止枚举全部服务和 Pod。
+- Grafana 容器使用 CPU、内存和 PID 上限；健康探测本身最多等待 5 秒。
 
 查询转圈不等于后端并发不足。先检查浏览器请求、Grafana 日志和 VictoriaLogs 指标，详细流程见 [Grafana/VictoriaLogs 查询性能与升级运行手册](../../docs/grafana-victorialogs-query-performance-runbook.md)。
 
-## 4. 安全升级
+## 4. 生产日志检索大屏
+
+`dashboards/vvg-log-search.json` 提供面向研发和运维的统一检索入口：
+
+- 默认时间范围为最近 15 分钟，默认命名空间为 `jwxt-prod`。
+- 命名空间、微服务（`container`）、Pod 和日志级别均为动态联动下拉框。
+- `message 模糊搜索` 使用 LogsQL 正则过滤；`.*` 表示全部，输入普通文字即可做包含匹配。
+- 页面包含匹配日志数、错误/严重日志数、按级别趋势和日志明细；自动刷新默认关闭。
+- 日志概览使用紧凑数字卡片；日志概览和日志趋势使用独立折叠行，点击行标题可隐藏。日志明细由单独的行边界保护，不会随趋势一起折叠。
+- 趋势图固定使用 Explore 的日志级别颜色，`warn` 在图例中显示为 `warning`，不会因序列出现顺序改变颜色。
+- 当前数据没有 `cluster` 流字段，因此集群控件只显示 `生产 CCE`。多集群接入时应先由 Vector 写入稳定的 `cluster` 流字段，再把该变量改成动态查询，不能用节点名代替集群。
+
+Dashboard provider 每 10 秒扫描一次目录。新增或更新 JSON 后无需重启 Grafana；生产部署时先把文件写入临时路径，再原子替换目标文件。
+
+完整的数据契约、三种导入方式、验证、回滚和 AI agent 操作边界见 [生产日志检索大屏配置与导入指南](../../docs/grafana-victorialogs-log-search-dashboard-guide.md)。
+
+## 5. 安全升级
 
 Grafana 13 会迁移 SQLite 和统一存储。升级前必须使用数据副本演练，正式切换时必须获得一致的 SQLite 备份。
 
@@ -86,7 +105,7 @@ docker logs --since 10m grafana 2>&1 \
 
 回滚到 Grafana 12 时不能只切旧镜像。必须停止新容器，同时恢复升级前 Compose、插件目录和 `grafana.db`，否则旧版本可能读取迁移后的不兼容状态。
 
-## 5. 常见问题
+## 6. 常见问题
 
 ### 插件下载卡住
 

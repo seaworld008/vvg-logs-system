@@ -2,7 +2,7 @@
 
 VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、存储、查询和可视化解决方案。
 
-当前验证基线：Vector `0.58.0`、VictoriaLogs `v1.52.0`、Grafana `13.2.0-ubuntu`、VictoriaLogs Grafana 插件 `0.31.0`。生产升级和故障排查请先阅读 [采集延迟运行手册](docs/vector-victorialogs-latency-runbook.md) 与 [查询性能运行手册](docs/grafana-victorialogs-query-performance-runbook.md)。
+当前验证基线：Vector `0.58.0`、VictoriaLogs `v1.52.0`、Grafana `13.2.0-ubuntu`、VictoriaLogs Grafana 插件 `0.31.0`。生产升级和故障排查请先阅读 [采集延迟运行手册](docs/vector-victorialogs-latency-runbook.md) 与 [查询性能运行手册](docs/grafana-victorialogs-query-performance-runbook.md)。研发日志检索大屏的导入、字段契约、验证和回滚见 [生产日志检索大屏配置与导入指南](docs/grafana-victorialogs-log-search-dashboard-guide.md)。
 
 ## 🏗️ 系统架构
 
@@ -251,7 +251,7 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
   - Kubernetes 版本：1MB/500事件批次 + 1秒超时 + 1GiB磁盘缓冲
   - 显式排除 `.gz/.tmp`，避免快速轮转文件晚读后批量涌入
   - 保留真实事件时间，不使用 `rewrite_timestamp` 掩盖积压
-- **Grafana**: Explore 默认15分钟、最多2000行、60秒数据源超时
+- **Grafana**: Explore 默认15分钟、最多500行、60秒数据源超时
 
 ## 📖 文档
 
