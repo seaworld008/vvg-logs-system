@@ -94,7 +94,7 @@
             "uid": "victorialogs-ds"
           },
           "editorMode": "code",
-          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level message:~$message | stats count() as matching_logs",
+          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message | stats count() as matching_logs",
           "queryType": "stats",
           "refId": "A"
         }
@@ -165,7 +165,7 @@
             "uid": "victorialogs-ds"
           },
           "editorMode": "code",
-          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level message:~$message level:in(\"error\",\"critical\") | stats count() as error_logs",
+          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level level:in(\"error\",\"critical\") _msg:$message | stats count() as error_logs",
           "queryType": "stats",
           "refId": "A"
         }
@@ -399,7 +399,7 @@
             "uid": "victorialogs-ds"
           },
           "editorMode": "code",
-          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level message:~$message | stats by (level) count() as logs",
+          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message | stats by (level) count() as logs",
           "legendFormat": "{{level}}",
           "queryType": "statsRange",
           "refId": "A",
@@ -456,7 +456,7 @@
             "uid": "victorialogs-ds"
           },
           "editorMode": "code",
-          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level message:~$message",
+          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message",
           "maxLines": 500,
           "queryType": "instant",
           "refId": "A"
@@ -630,15 +630,15 @@
       {
         "current": {
           "selected": true,
-          "text": ".*",
-          "value": ".*"
+          "text": "*",
+          "value": "*"
         },
-        "description": "在 message 字段中进行不区分词边界的正则模糊匹配；.* 表示全部。",
+        "description": "在日志正文中搜索关键词或短语并高亮匹配内容；* 表示全部。",
         "hide": 0,
         "label": "message 模糊搜索",
         "name": "message",
         "options": [],
-        "query": ".*",
+        "query": "*",
         "skipUrlSync": false,
         "type": "textbox"
       }
@@ -670,6 +670,6 @@
   "timezone": "browser",
   "title": "VVG 生产日志检索大屏",
   "uid": "vvg-log-search",
-  "version": 4,
+  "version": 6,
   "weekStart": "monday"
 }
