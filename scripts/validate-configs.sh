@@ -97,21 +97,21 @@ validate_static() {
   require_literal "docker-compose/vector/env.example" 'VECTOR_API_BIND=127.0.0.1' \
     "Docker Vector API binds to host loopback by default"
 
-  if rg -n --glob '*.yaml' --glob '*.yml' 'drop_newest|rewrite_timestamp' \
-      docker-compose k8s-deployment >/dev/null; then
+  if grep -R -n -E --include='*.yaml' --include='*.yml' \
+      'drop_newest|rewrite_timestamp' docker-compose k8s-deployment >/dev/null; then
     fail "Active YAML must not drop newest logs or rewrite event timestamps"
   else
     pass "Active YAML preserves logs and event timestamps"
   fi
 
-  if rg -n '(^|[=:])[^#[:space:]]*latest([[:space:]]|$)' \
+  if grep -n -E '(^|[=:])[^#[:space:]]*latest([[:space:]]|$)' \
       docker-compose/*/env.example docker-compose/*/docker-compose.yml >/dev/null; then
     fail "Compose baselines must not use latest tags"
   else
     pass "Compose baselines use pinned versions"
   fi
 
-  if rg -n '^version:' docker-compose/*/docker-compose.yml >/dev/null; then
+  if grep -n '^version:' docker-compose/*/docker-compose.yml >/dev/null; then
     fail "Compose files must not use the obsolete top-level version field"
   else
     pass "Compose files omit the obsolete top-level version field"
