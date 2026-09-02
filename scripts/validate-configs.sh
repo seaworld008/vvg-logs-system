@@ -317,7 +317,7 @@ validate_runtime() {
     plugin_version="${plugin_version%$'\r'}"
     text_plugin_version="${text_plugin_version%$'\r'}"
     temp_dir="$(mktemp -d)"
-    trap "rm -rf -- '${temp_dir}'" EXIT
+    trap "chmod -R u+w -- '${temp_dir}' 2>/dev/null || true; rm -rf -- '${temp_dir}'" EXIT
     plugin_dir="${temp_dir}/plugins/releases/grafana13.2.0-vl0.31.0-text6.3.0"
     bash scripts/install-grafana-plugins.sh \
       docker-compose/grafana/env.example \
@@ -330,6 +330,7 @@ validate_runtime() {
       --entrypoint grafana \
       "${grafana_image}" \
       cli --pluginsDir /var/lib/grafana-plugins plugins ls)"
+    chmod -R u+w -- "${temp_dir}"
     rm -rf "${temp_dir}"
     trap - EXIT
     if grep -Fq "victoriametrics-logs-datasource @ ${plugin_version}" <<<"${plugin_list}"; then
