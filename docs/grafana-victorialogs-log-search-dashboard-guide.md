@@ -6,6 +6,7 @@
 
 - Grafana `13.2.0`。
 - VictoriaLogs Grafana 数据源插件 `0.31.0`。
+- Business Text 面板插件 `6.3.0`。
 - 数据源类型 `victoriametrics-logs-datasource`。
 - 默认数据源 UID `victorialogs-ds`。
 - Kubernetes/CCE 容器日志，日志字段满足本文的数据契约。
@@ -22,11 +23,12 @@ docker-compose/grafana/dashboards/vvg-log-search.json
 
 1. 新打开时直接查询最近 15 分钟、`jwxt-prod` 命名空间。
 2. 不需要编辑 LogsQL，即可选择命名空间、微服务、Pod 和级别。
-3. 可以在日志正文中进行关键词或短语搜索，并高亮匹配内容。
-4. 日志概览和趋势可独立折叠，折叠后保留尽可能大的日志阅读区域。
-5. 自动刷新默认关闭，避免多人打开时持续扫描高流量日志。
-6. 所有级别颜色固定与 Grafana Explore 一致，不随序列顺序变化。
-7. JSON 是配置源，支持 Git 审计、回滚和自动校验。
+3. 可以在日志正文中进行单条件搜索，也可以动态组合多个“包含/不包含”条件。
+4. 多条件编辑期间不查询，只有点击“应用过滤”才统一刷新。
+5. 日志概览和趋势合并为一行，左侧趋势图、右侧双统计，可整体折叠以保留日志阅读区域。
+6. 自动刷新默认关闭，避免多人打开时持续扫描高流量日志。
+7. 所有级别颜色固定与 Grafana Explore 一致，不随序列顺序变化。
+8. JSON 是配置源，支持 Git 审计、回滚和自动校验。
 
 ## 3. 日志数据契约
 
@@ -75,14 +77,18 @@ curl -fsS http://127.0.0.1:9428/select/logsql/stream_field_values \
 
 | 显示名称 | 变量名 | 类型 | 默认值 | 数据来源 |
 | --- | --- | --- | --- | --- |
-| 集群（当前） | `cluster` | Custom | `生产 CCE` | 单值占位 |
+| 集群 | `cluster` | Custom | `生产 CCE` | 单值占位 |
 | 命名空间 | `namespace` | Query/Multi | `jwxt-prod` | `namespace` 字段值 |
-| 微服务 | `service` | Query/Multi | All | `container` 字段值 |
+| 服务 | `service` | Query/Multi | All | `container` 字段值 |
 | Pod | `pod` | Query/Multi | All | `pod` 字段值 |
 | 级别 | `level` | Query/Multi | All | `level` 字段值 |
-| message 模糊搜索 | `_msg` | Text box | `*` | 用户输入 |
+| message | `_msg` | Text box | `*` | 用户输入，使用模糊搜索 |
+| message 多条件表达式 | `message_filter_expr` | 隐藏 Text box | `*` | Business Text 生成 |
+| message 表单状态 | `message_filter_state` | 隐藏 Text box | 空状态 | URL-safe JSON |
 
 后续变量依赖前面的变量：命名空间变化后，微服务列表会刷新；微服务变化后，Pod 和级别列表会刷新。
+
+`message_filter_expr` 和 `message_filter_state` 不显示在变量栏。前者只保存经过引用和校验的 LogsQL，后者保存 AND/OR、条件行和高级表达式；两者随 URL 同步，因此刷新页面或复制完整链接后可恢复已应用状态。
 
 所有 Query/Multi 变量都显式设置 `allValue: "*"`。否则 Grafana 可能把 All 展开成全部服务和全部 Pod 的长列表，导致请求体膨胀并增加插件与 Grafana 的处理负担。正确展开结果应类似：
 
@@ -92,15 +98,14 @@ container:in(*) pod:in(*) level:in(*)
 
 ### 4.2 可折叠区域
 
-- `日志概览`：包含匹配日志数和错误/严重日志数。
-- `日志趋势`：包含按级别堆叠的日志趋势。
+- `日志概览与趋势`：左侧包含按级别堆叠趋势图，右侧上下包含匹配日志数和错误/严重日志数。
 - `日志明细`：作为独立行边界，保护日志面板不被上一个折叠行一起隐藏。
 
-Grafana 的展开行会包含它后面的面板，直到遇到下一个 `row` 面板。因此不能删除 `日志明细` 行边界，否则折叠 `日志趋势` 时可能连日志明细一起隐藏。
+Grafana 的展开行会包含它后面的面板，直到遇到下一个 `row` 面板。因此不能删除 `日志明细` 行边界，否则折叠 `日志概览与趋势` 时可能连日志明细一起隐藏。
 
 ### 4.3 紧凑布局
 
-- 两个统计面板高度为 2 个 Grafana 网格单位。
+- 左侧趋势图宽度为 `19/24`，高度为 8；右侧两个统计面板宽度为 `5/24`，高度各 4。
 - 数字字号固定为 28。
 - 统计面板关闭小型背景趋势图。
 - 日志明细保留 20 个网格单位高度。
@@ -124,7 +129,7 @@ Grafana 的展开行会包含它后面的面板，直到遇到下一个 `row` �
 所有面板复用以下基础条件：
 
 ```logsql
-namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message
+namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw}
 ```
 
 ### 5.1 匹配日志数
@@ -132,6 +137,7 @@ namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message
 ```logsql
 namespace:=$namespace container:=$service pod:=$pod level:=$level
 _msg:$message
+${message_filter_expr:raw}
 | stats count() as matching_logs
 ```
 
@@ -140,6 +146,7 @@ _msg:$message
 ```logsql
 namespace:=$namespace container:=$service pod:=$pod level:=$level level:in("error","critical")
 _msg:$message
+${message_filter_expr:raw}
 | stats count() as error_logs
 ```
 
@@ -148,6 +155,7 @@ _msg:$message
 ```logsql
 namespace:=$namespace container:=$service pod:=$pod level:=$level
 _msg:$message
+${message_filter_expr:raw}
 | stats by (level) count() as logs
 ```
 
@@ -156,6 +164,19 @@ _msg:$message
 `message` 是 Grafana Text box 变量，通过官方推荐的 `_msg:$message` word filter 使用。默认值 `*` 表示不限制日志正文；插件会对变量值进行引用和转义，并把搜索词写入 Grafana 的 `searchWords` 元数据，使 Logs 面板高亮匹配内容。
 
 不要使用 `message:~$message`，也不要直接写 `| $message`。前者不能稳定生成高亮元数据并会让 `*` 变成非法正则；后者会把未加引号的中文直接放进 LogsQL。需要高级正则时，在 Explore 中编写明确的 LogsQL，例如 `_msg:~"request-[0-9]+"`。
+
+### 5.5 多条件 message 过滤器
+
+点击“添加条件”后，每行选择“包含”或“不包含”并输入内容；全局选择“全部满足（AND）”或“任一满足（OR）”。添加、删除和编辑只改变浏览器本地表单，不执行查询；点击“应用过滤”才生成表达式并更新 URL。零条件生成 `*`，普通条件软上限为 20。
+
+普通值会移除 NUL 和换行，转义反斜杠及双引号，并始终放入双引号。示例：
+
+```logsql
+_msg:"湖南非税" -_msg:"调试日志"
+(_msg:"退款申请" OR -_msg:"调试日志")
+```
+
+高级 LogsQL 区域默认折叠，只允许 filter，不允许 `| stats`、`| sort` 等管道。它属于受信任运维入口；语法错误应快速返回，使用“重置”可恢复零条件。
 
 ## 6. 导入前检查
 
@@ -302,6 +323,7 @@ jq -n \
 - 命名空间：`jwxt-prod`。
 - 微服务、Pod、级别：All。
 - message：`*`。
+- message 多条件：零条件、AND、高级表达式 `*`。
 - 自动刷新：Off。
 
 旧书签、旧标签页和 URL 中的 `var-*`、`from`、`to` 参数会覆盖 Dashboard 默认值。
@@ -310,12 +332,14 @@ jq -n \
 
 1. 所有四个查询返回数据，无 `No data` 或 LogsQL 解析错误。
 2. 输入一个已知 message 片段，匹配数量下降且日志明细全部命中。
-3. 选择一个微服务，统计、趋势和明细同时收窄。
-4. 选择一个 Pod，Pod 列表只来自已选命名空间和微服务。
-5. 折叠 `日志概览`，统计面板隐藏。
-6. 折叠 `日志趋势`，趋势隐藏，但 `日志明细` 保持可见。
-7. 展开趋势，级别颜色与第 4.4 节一致。
-8. Grafana 容器保持 `running/healthy`，`RestartCount=0`。
+3. 添加、删除和编辑多条件时，四个日志查询不应启动；点击“应用过滤”后才统一刷新。
+4. 验证包含/不包含、AND/OR、2/5/10/20 条、中文、空格、引号、反斜杠和刷新恢复。
+5. 21 条被前端拒绝，高级表达式含管道时显示错误且不更新查询。
+6. 选择一个微服务，统计、趋势和明细同时收窄。
+7. 选择一个 Pod，Pod 列表只来自已选命名空间和微服务。
+8. 折叠 `日志概览与趋势`，两个统计和趋势图一起隐藏，但 `日志明细` 保持可见。
+9. 展开概览与趋势，级别颜色与第 4.4 节一致。
+10. Grafana 容器保持 `running/healthy`，`RestartCount=0`。
 
 ### 10.3 直接验证 LogsQL
 
@@ -376,6 +400,8 @@ _stream_fields=cluster,namespace,container,pod,level
 - 单次日志明细限制 500 行；需要更多上下文时先选择微服务或 Pod 缩小范围。
 - Multi 变量的 All 必须使用自定义值 `*`，禁止枚举全部服务和 Pod。
 - 优先按流字段缩小范围，再执行 message word filter；高级正则放到 Explore。
+- 多条件只在“应用过滤”时刷新；不要把 `elementValueChanged` 改成自动更新 Dashboard 变量。
+- 普通 message 条件最多 20 条，超出时先缩小 namespace、service 或 Pod 范围。
 - 不要把默认范围改为 1 小时或 24 小时。
 - 不要因为 UI 转圈就直接扩大 VictoriaLogs 并发；先区分浏览器取消、插件错误、反向代理和后端执行时间。
 
@@ -398,12 +424,13 @@ _stream_fields=cluster,namespace,container,pod,level
 3. 数据源 UID 是否存在。
 4. URL 是否带有旧的 `var-message=*`。
 5. 变量是否展开成过长或互相冲突的 `in(...)` 条件。
+6. URL 中的 `var-message_filter_expr` 是否为合法 LogsQL；不确定时点击多条件面板“重置”。
 
 如果 All 被展开成几十个服务或 Pod，确认对应变量的 `allValue` 仍为 `*`。
 
-### 14.2 折叠趋势后日志也消失
+### 14.2 折叠概览与趋势后日志也消失
 
-确认 `日志趋势` 和日志面板之间存在 `日志明细` row 面板。Grafana 使用下一个 row 作为折叠边界。
+确认 `日志概览与趋势` 和日志面板之间存在 `日志明细` row 面板。Grafana 使用下一个 row 作为折叠边界。
 
 ### 14.3 颜色与 Explore 不一致
 
@@ -436,6 +463,8 @@ mv -f /data/grafana/dashboards/.vvg-log-search.json.rollback \
 ```
 
 等待 provider 自动加载并重复第 10 节验收。
+
+Business Text 版本或面板代码导致页面不可用时，必须同时恢复旧 Dashboard JSON 和旧插件 release 路径；只回滚 JSON 会留下无用插件，只回滚插件目录会使新面板显示插件缺失。恢复后核对镜像 ID、两个插件版本、Dashboard version 和隐藏变量均回到备份状态。
 
 ### 15.2 Git 回滚
 
@@ -471,6 +500,7 @@ AI agent 修改本大屏时必须遵循以下顺序：
 
 ```bash
 bash scripts/validate-configs.sh --static
+node scripts/validate-vvg-message-filter.mjs
 git diff --check
 ```
 
@@ -482,8 +512,10 @@ git diff --check
 - `jwxt-prod` 默认命名空间。
 - namespace/container/message 查询能力。
 - message 的 `*` 默认值和 word filter 查询。
+- Business Text `6.3.0`、两个隐藏变量和四条共享过滤表达式。
+- 表达式生成器的包含/不包含、AND/OR、转义、20 条边界和高级管道拒绝。
 - 四个 Query/Multi 变量的 `allValue: "*"`。
-- 三个折叠行边界。
+- 两个紧凑折叠行边界。
 - 紧凑统计面板。
 - Explore 固定颜色。
 
