@@ -86,7 +86,7 @@ const styles = `
 }
 .vvg-condition-row {
   display: grid;
-  grid-template-columns: minmax(112px, 144px) minmax(180px, 1fr) 72px;
+  grid-template-columns: 72px minmax(112px, 144px) minmax(180px, 1fr);
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -130,8 +130,8 @@ const styles = `
 .vvg-message-filter select:focus-visible,
 .vvg-message-filter textarea:focus-visible { outline: 2px solid #5794f2; outline-offset: 1px; }
 @media (max-width: 720px) {
-  .vvg-condition-row { grid-template-columns: 112px minmax(0, 1fr); }
-  .vvg-condition-row button { grid-column: 2; justify-self: end; }
+  .vvg-condition-row { grid-template-columns: 72px minmax(0, 1fr); }
+  .vvg-condition-row input { grid-column: 1 / -1; }
   .vvg-filter-actions { flex-wrap: wrap; }
 }
 `.trim();
@@ -252,7 +252,7 @@ const renderRows = () => {
     remove.dataset.action = "delete";
     remove.setAttribute("aria-label", "删除第 " + (index + 1) + " 条条件");
 
-    row.append(operator, input, remove);
+    row.append(remove, operator, input);
     rowsHost.append(row);
   });
   summary.textContent = state.conditions.length + " 个条件";
@@ -261,6 +261,42 @@ const render = () => {
   renderLogic();
   renderRows();
   advancedInput.value = state.advanced || "*";
+};
+
+const nextRefreshExpression = (expression) => {
+  const search = context.grafana.locationService.getSearchObject?.() || {};
+  const current = search["var-message_filter_expr"];
+  return current === expression ? "(" + expression + ")" : expression;
+};
+
+const refreshSlidingRangeInPlace = () => {
+  const range = context.grafana.timeRange;
+  const rawFrom = range?.raw?.from;
+  const rawTo = range?.raw?.to;
+  const slidingFrom = /^now(?:[+-]\d+(?:ms|s|m|h|d|w|M|y))?$/;
+  const currentTo = /^now(?:[+-]0s)?$/;
+  if (
+    typeof rawFrom !== "string" ||
+    typeof rawTo !== "string" ||
+    !slidingFrom.test(rawFrom) ||
+    !currentTo.test(rawTo) ||
+    typeof range.from?.add !== "function" ||
+    typeof range.to?.add !== "function"
+  ) {
+    return false;
+  }
+
+  const delta = Date.now() - range.to.valueOf();
+  if (delta > 0) {
+    range.from.add(delta, "milliseconds");
+    range.to.add(delta, "milliseconds");
+  }
+  return true;
+};
+
+const isRelativeRange = () => {
+  const raw = context.grafana.timeRange?.raw || {};
+  return [raw.from, raw.to].some((value) => typeof value === "string" && value.includes("now"));
 };
 
 const handleClick = (event) => {
@@ -291,10 +327,15 @@ const handleClick = (event) => {
   if (target.dataset.action === "reset") {
     state = { v: 1, logic: "AND", conditions: [], advanced: "*" };
     render();
+    const refreshedInPlace = refreshSlidingRangeInPlace();
     context.grafana.locationService.partial(
-      { "var-message_filter_expr": "*", "var-message_filter_state": EMPTY_STATE },
+      {
+        "var-message_filter_expr": nextRefreshExpression("*"),
+        "var-message_filter_state": EMPTY_STATE,
+      },
       true,
     );
+    if (!refreshedInPlace && isRelativeRange()) context.grafana.refresh();
     context.grafana.notifySuccess(["message 条件过滤器", "过滤条件已重置"]);
     return;
   }
@@ -307,13 +348,15 @@ const handleClick = (event) => {
         conditions: state.conditions.map(cleanCondition),
         advanced: String(state.advanced || "*").trim() || "*",
       };
+      const refreshedInPlace = refreshSlidingRangeInPlace();
       context.grafana.locationService.partial(
         {
-          "var-message_filter_expr": expression,
+          "var-message_filter_expr": nextRefreshExpression(expression),
           "var-message_filter_state": encodeState(normalized),
         },
         true,
       );
+      if (!refreshedInPlace && isRelativeRange()) context.grafana.refresh();
       context.grafana.notifySuccess(["message 条件过滤器", "过滤条件已应用"]);
     } catch (error) {
       context.grafana.notifyError(["message 条件过滤器", error.message]);
@@ -421,9 +464,9 @@ for (const item of dashboard.panels) {
       .replace(" _msg:$message", " _msg:$message ${message_filter_expr:raw}");
   }
 }
-dashboard.version = 11;
+dashboard.version = 13;
 
 await mkdir(dirname(panelPath), { recursive: true });
 await writeFile(panelPath, `${JSON.stringify(panel, null, 2)}\n`, "utf8");
 await writeFile(dashboardPath, `${JSON.stringify(dashboard, null, 2)}\n`, "utf8");
-console.log("Rendered Business Text message filter and VVG log search dashboard version 11");
+console.log("Rendered Business Text message filter and VVG log search dashboard version 13");

@@ -88,6 +88,8 @@ node scripts/validate-vvg-message-filter.mjs
 
 当前 message 过滤器使用 Business Text 6.3.0。Business Forms 6.3.5 已实测不适合该交互，因为每个表单元素固定占一个 `InlineFieldRow`，无法实现操作符、输入框和删除按钮同一行。
 
+“应用过滤时刷新到最新相对时间”的单轮查询实现已在 Grafana 12.4.4 和 13.2.0、Business Text 6.3.0 上通过浏览器请求级验证。兼容结论仅覆盖这组版本；升级任一组件后，必须重新验证标准 `now-N` 到 `now` 范围每次 Apply/Reset 恰好产生 4 个 `/api/ds/query` 请求，且第二次 Apply 的 `to` 大于第一次。
+
 ### 多条件数据流
 
 ```text
@@ -182,6 +184,7 @@ docker compose up -d --no-deps --force-recreate grafana
 - 只读插件目录必须禁用 Grafana 默认预安装和自动更新，否则后台任务会报只读文件系统。
 - HTTP 200 的插件 `module.js` 仍可能因 React/Grafana 版本不兼容而执行失败；必须看 Chrome 控制台。
 - Grafana API 返回的 Dashboard `version` 是数据库修订计数，不等同于源 JSON 的 `version`。
+- Business Text 的“应用过滤”在标准 `now-N` 到 `now` 滑动窗口中，先原地推进 `context.grafana.timeRange`，再让 `message_filter_expr` 在原表达式和等价括号表达式之间切换，以保证单次变量刷新。不要在这条路径追加 `context.grafana.refresh()`，否则四个日志面板会产生两轮查询。带取整的相对时间使用官方刷新兜底；绝对时间范围保持不变。Grafana 或 Business Text 升级后必须重新做请求数量、时间戳和括号 LogsQL 验收。
 - 远端缺少 Python 不代表 JSON 无法验证；本地解析后比较 SHA 即可。
 - 浏览器中的“转圈”不等于 VictoriaLogs 并发不足；先看请求状态和后端耗时。
 

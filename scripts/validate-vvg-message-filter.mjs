@@ -24,7 +24,19 @@ assert.match(panelTemplate.options.content, /data-action="apply"/);
 assert.match(panelTemplate.options.content, /data-action="reset"/);
 assert.match(panelTemplate.options.content, /vvg-filter-rows/);
 assert.match(panelTemplate.options.styles, /grid-template-columns/);
+assert.match(panelTemplate.options.styles, /grid-template-columns: 72px/);
 assert.match(panelTemplate.options.styles, /max-width: 720px/);
+assert.match(panelTemplate.options.afterRender, /row\.append\(remove, operator, input\)/);
+assert.match(panelTemplate.options.afterRender, /const nextRefreshExpression = \(expression\) =>/);
+assert.match(panelTemplate.options.afterRender, /current === expression \? "\(" \+ expression \+ "\)"/);
+assert.match(panelTemplate.options.afterRender, /const refreshSlidingRangeInPlace = \(\) =>/);
+assert.match(panelTemplate.options.afterRender, /range\.from\.add\(delta, "milliseconds"\)/);
+assert.match(panelTemplate.options.afterRender, /range\.to\.add\(delta, "milliseconds"\)/);
+assert.equal(
+  (panelTemplate.options.afterRender.match(/refreshSlidingRangeInPlace\(\)/g) || []).length,
+  2,
+);
+assert.equal((panelTemplate.options.afterRender.match(/context\.grafana\.refresh\(\)/g) || []).length, 2);
 
 const updateCode = panelTemplate.options.afterRender;
 const startMarker = "// VVG_BUILDER_START";
@@ -91,7 +103,7 @@ assert.throws(
   /高级过滤只允许 LogsQL 过滤条件/,
 );
 
-assert.equal(dashboard.version, 11);
+assert.equal(dashboard.version, 13);
 const dashboardPanel = dashboard.panels.find(({ id }) => id === panelTemplate.id);
 assert.ok(dashboardPanel, "dashboard must embed the message filter panel");
 assert.deepEqual(dashboardPanel.options, panelTemplate.options);
