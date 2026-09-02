@@ -93,6 +93,8 @@ GeoIP 不再从现场华为云、OBS 或业务 CDN 下载。模板固定使用�
 
 版本、大小、校验值、授权与归属见 [GeoIP 数据声明](vector/geoip/NOTICE.md)。更新时必须发布新的月份资产并修改 manifest 中的文件名、URL 和 SHA-256；禁止使用 `latest`。DB-IP City Lite 使用 CC BY 4.0，Dashboard 中的 `IP Geolocation by DB-IP` 链接必须保留。
 
+只改 URL 不会更新已通过旧 SHA 校验的本地文件。文件名也不代表 MMDB metadata 中的真实数据库类型；变更数据提供方时必须同步核对 `type: mmdb` 和 VRL 嵌套字段映射，详细门禁见运行手册。
+
 ## 4. 创建 Vector Secret
 
 Vector 通过 directory secret backend 读取凭据，密码不会进入 ConfigMap 或进程环境：
