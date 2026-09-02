@@ -10,6 +10,8 @@
 | 日志检索 Dashboard | `scripts/render-vvg-message-filter.mjs`、`docker-compose/grafana/dashboards/vvg-log-search.json` |
 | 查询慢或页面转圈 | `docs/grafana-victorialogs-query-performance-runbook.md` |
 | Vector 延迟或丢日志 | `docs/vector-victorialogs-latency-runbook.md` |
+| Gateway 日志写入 ClickHouse | `clickhouse-gateway/README.md`、`docs/vector-clickhouse-gateway-runbook.md` |
+| KubeDoor Gateway Dashboard / GeoIP | `scripts/sanitize-clickhouse-gateway-dashboard.mjs`、`clickhouse-gateway/vector/geoip/NOTICE.md` |
 | 字段、导入、回滚 | `docs/grafana-victorialogs-log-search-dashboard-guide.md` |
 | 全仓库约束 | `AGENTS.md`、`scripts/validate-configs.sh` |
 
@@ -20,6 +22,17 @@
 - 只升级 Grafana：先用新镜像挂载现有插件 release 做兼容测试。
 - 采集异常：先检查 CRI、真实日志路径、Vector 指标和 VictoriaLogs 写入，不要从 Grafana 查询现象反推采集故障。
 - 查询异常：先分离浏览器、Grafana/plugin、反向代理和 VictoriaLogs 后端耗时，不要直接扩大并发或超时。
+- Gateway ClickHouse 链路：只改 `vector-clickhouse-gateway` 和其所属 ClickHouse；不要顺带升级现有 Grafana、VictoriaLogs 或应用服务。
+
+### ClickHouse 网关链路特别门禁
+
+- 先用 Compose labels、working directory 和 mounts 确认 ClickHouse 所有权，不能按镜像名判断。
+- 最新版本必须在执行时从官方稳定/LTS release 解析，并固定精确 patch；镜像先进入私库，正式启动不得联网拉取。
+- 首次新版本启动使用第二份一致性数据副本和 loopback 端口；除了旧数据查询，还必须插入一条与 Vector 相同编码的事件。
+- `DateTime64(3)` 使用 RFC3339 字符串。毫秒整数在 ClickHouse 版本间可能产生不同解释，异常分区可能被 TTL 立即删除。
+- ClickHouse 120 秒异步写入等待要求 Vector request timeout 大于 120 秒；当前基线 180 秒且不限制 retry attempts。
+- 跨 Vector 版本不要复制活动 `disk_v2` buffer。只在 sink 批次排空后迁移 checksum 一致的 checkpoint。
+- system log 清理只针对 DDL 明确标注可安全清理的 `system` 表，并且必须先有一致性备份；业务表 TTL、ORDER BY、MV 和 projection 不随镜像升级修改。
 
 ## 3. 外置插件最佳实践
 
@@ -193,6 +206,8 @@ docker compose up -d --no-deps --force-recreate grafana
 ```bash
 node scripts/render-vvg-message-filter.mjs
 node scripts/validate-vvg-message-filter.mjs
+node scripts/sanitize-clickhouse-gateway-dashboard.mjs
+node scripts/validate-clickhouse-gateway.mjs
 bash -n scripts/install-grafana-plugins.sh
 bash -n scripts/validate-configs.sh
 bash scripts/validate-configs.sh --static

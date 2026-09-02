@@ -8,6 +8,10 @@
 **/grafana-data/
 **/victoria-logs-data/
 **/vector_data/
+clickhouse-gateway/clickhouse/data/
+clickhouse-gateway/clickhouse/logs/
+clickhouse-gateway/**/secret.yaml
+clickhouse-gateway/vector/geoip/*.mmdb
 
 # Local PR drafting artifact
 PR_BODY.md

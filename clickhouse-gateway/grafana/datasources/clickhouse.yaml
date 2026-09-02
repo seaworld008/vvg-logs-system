@@ -1,0 +1,23 @@
+apiVersion: 1
+
+datasources:
+  - name: Gateway ClickHouse
+    uid: gateway-clickhouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    editable: false
+    jsonData:
+      host: clickhouse.example.internal
+      port: 9000
+      protocol: native
+      username: grafana_reader
+      defaultDatabase: gateway_logs
+      version: 4.5.1
+      dialTimeout: 10
+      queryTimeout: 60
+      connMaxLifetime: 5
+      maxIdleConns: 10
+      maxOpenConns: 20
+      validateSql: true
+    secureJsonData:
+      password: $CLICKHOUSE_GRAFANA_PASSWORD

@@ -87,6 +87,8 @@ validate_static() {
     "Local server credential files are ignored"
   require_file "AGENTS.md" "Repository AI agent instructions exist"
   require_file "docs/ai-agent-operations-guide.md" "AI agent operations guide exists"
+  require_file "docs/vector-clickhouse-gateway-runbook.md" \
+    "Vector ClickHouse Gateway runbook exists"
   require_file "docs/images/vvg-dashboard-overview.png" "Sanitized dashboard overview exists"
   require_file "docs/images/vvg-message-filter-builder.png" "Sanitized message filter screenshot exists"
   require_literal "README.md" 'docs/images/vvg-dashboard-overview.png' \
@@ -251,6 +253,12 @@ validate_static() {
   else
     pass "Compose files omit the obsolete top-level version field"
   fi
+
+  if bash scripts/validate-clickhouse-gateway.sh --static; then
+    pass "Gateway ClickHouse static configuration validates"
+  else
+    fail "Gateway ClickHouse static configuration validates"
+  fi
 }
 
 extract_vector_config() {
@@ -363,6 +371,9 @@ validate_runtime() {
   done
   rm -rf "${temp_dir}"
   trap - EXIT
+
+  bash scripts/validate-clickhouse-gateway.sh --runtime
+  pass "Gateway ClickHouse runtime configuration validates"
 }
 
 case "${mode}" in
