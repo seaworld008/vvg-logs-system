@@ -158,6 +158,8 @@ request:
 
 initContainer 只在本地文件缺失或 SHA 不符时下载，先写随机临时文件，校验后 `chmod 0444` 并原子改名。下载失败应阻止 Vector 启动，不能静默回退到未知或未经校验的数据。
 
+仅修改下载 URL 不会触发更新：如果 `target` 仍指向旧文件且旧 `expected` 与本地文件一致，initContainer 会在下载前直接退出。发布新库时必须同时更新目标文件名、URL 和 SHA-256。也不能根据 URL 或文件名判断数据库类型；先读取 MMDB metadata。若从 `GeoLite2-City` 切换到 `DBIP-City-Lite`，Vector 必须从 `type: geoip` 改为 `type: mmdb`，并把扁平的 `city_name`、`region_name`、`country_name` 读取改为 `city.names`、`subdivisions[].names`、`country.names` 和 `location` 嵌套字段。强制覆盖文件但不改这两处配置会导致 Vector 启动失败或地域字段全部为空。
+
 ## 8. Grafana
 
 Grafana 只读账号只能 `SELECT` 所需数据库和 system 元数据。禁止把 ClickHouse 管理账号放入 datasource。默认最近 15 分钟、自动刷新关闭、明细最多 500 行；大范围分析先扩大聚合间隔，不先扩大 ClickHouse 并发。
