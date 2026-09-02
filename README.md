@@ -40,7 +40,7 @@ VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、�
 
 ![VVG 日志检索大屏总览](docs/images/vvg-dashboard-overview.png)
 
-多条件 message 过滤器支持逐行添加、包含/不包含和全局 AND/OR。编辑期间不查询，点击“应用过滤”后统一刷新四个面板。
+多条件 message 过滤器支持逐行添加、包含/不包含和全局 AND/OR。编辑期间不查询；点击“应用过滤”会在一次状态更新中同时应用条件并重算相对时间，只查询一轮四个面板即可得到最新日志。
 
 ![VVG message 多条件过滤器](docs/images/vvg-message-filter-builder.png)
 
