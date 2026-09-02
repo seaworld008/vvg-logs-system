@@ -11,6 +11,7 @@ services:
       - "${GRAFANA_PORT}:3000"
     volumes:
       - ${GRAFANA_DATA_DIR}:/var/lib/grafana
+      - ${GRAFANA_PLUGINS_DIR}:/var/lib/grafana-plugins:ro
       - ./dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./datasources:/etc/grafana/provisioning/datasources:ro
     environment:
@@ -24,6 +25,8 @@ services:
       - GF_LOG_LEVEL=${GRAFANA_LOG_LEVEL}
       - GF_EXPLORE_DEFAULTTIMEOFFSET=15m
       - GF_PATHS_PLUGINS=/var/lib/grafana-plugins
+      - GF_PLUGINS_PREINSTALL_DISABLED=true
+      - GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false
       - GF_SECURITY_ALLOW_EMBEDDING=${GRAFANA_ALLOW_EMBEDDING}
       - GF_UNIFIED_ALERTING_ENABLED=true
     networks:

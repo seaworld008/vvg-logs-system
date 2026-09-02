@@ -1,6 +1,6 @@
 # Grafana/VictoriaLogs 查询性能与升级运行手册
 
-> 验证基线：Grafana `13.2.0-ubuntu`、VictoriaLogs 数据源插件 `0.31.0`、VictoriaLogs `v1.52.0`
+> 验证基线：Grafana `13.2.0-ubuntu`、VictoriaLogs 数据源插件 `0.31.0`、Business Text `6.3.0`、VictoriaLogs `v1.52.0`
 > 最后验证：2026-09-01
 > 适用场景：Grafana Explore -> VictoriaLogs 单节点
 
@@ -180,27 +180,21 @@ _msg:~”value“
 ```text
 grafana/grafana:13.2.0-ubuntu
 victoriametrics-logs-datasource: 0.31.0
+marcusolsson-dynamictext-panel: 6.3.0
 ```
 
 不要在生产 Compose 中设置运行时在线插件安装。插件下载失败可能在旧目录已移除、新目录未就绪时阻塞 Grafana 启动。
 
-对 bind mount `/var/lib/grafana` 的部署，预装插件必须位于数据挂载之外，本仓库固定使用 `/var/lib/grafana-plugins` 和 `GF_PATHS_PLUGINS`。否则 bind mount 会遮住镜像构建阶段写入 `/var/lib/grafana/plugins` 的插件。
+对 bind mount `/var/lib/grafana` 的部署，插件必须位于数据挂载之外。本仓库把版本化宿主机目录只读挂载到 `/var/lib/grafana-plugins`，设置 `GF_PATHS_PLUGINS`，并禁用 Grafana 默认插件预安装和自动更新。这样 Grafana 镜像升级与插件升级相互独立，也避免 SQLite 数据卷遮住插件或后台任务写入不可变 release。
 
-### 5.2 在受控机器构建
+### 5.2 在受控机器发布插件包
 
 ```bash
 cd docker-compose/grafana
-docker build \
-  --build-arg GRAFANA_VERSION=13.2.0-ubuntu \
-  --build-arg VICTORIALOGS_PLUGIN_VERSION=0.31.0 \
-  -t vvg-grafana:13.2.0-plugin0.31.0 .
-
-docker run --rm --entrypoint grafana \
-  vvg-grafana:13.2.0-plugin0.31.0 \
-  cli --pluginsDir /var/lib/grafana-plugins plugins ls
+sudo bash ../../scripts/install-grafana-plugins.sh .env
 ```
 
-生产服务器无法访问插件站点时，在有代理的受控工作机完成构建并推送私有仓库。生产启动只拉取已验证镜像。
+该命令只生成固定版本的外置插件包，不构建 Grafana 镜像。生产服务器无法访问插件站点时，在有代理的同架构 Linux 主机生成 release 目录，归档、计算 SHA-256 后传输；生产启动只读取已验证的只读目录。
 
 ### 5.3 一致性备份
 
@@ -234,7 +228,7 @@ docker run -d --name grafana-upgrade-test \
   -v "$PWD/datasources:/etc/grafana/provisioning/datasources:ro" \
   -e VICTORIALOGS_URL=http://VICTORIALOGS_HOST:9428 \
   -e GF_EXPLORE_DEFAULTTIMEOFFSET=15m \
-  vvg-grafana:13.2.0-plugin0.31.0
+  grafana/grafana:13.2.0-ubuntu
 ```
 
 必须确认：数据库 migration 完成、插件签名有效、数据源注册、`/api/health` 正常、没有 panic/fatal/migration failed。
@@ -274,14 +268,14 @@ docker compose --env-file .env up -d --no-deps --force-recreate grafana
 3. `memory-swap` 与 `memory` 相等表示不提供额外 Swap。应用后必须通过 `docker inspect` 核对 `NanoCpus`、`Memory`、`MemorySwap` 和 `PidsLimit`。
 4. 普通 container restart 会保留 runtime 限制；`--force-recreate` 会创建新容器并丢失这些限制，所以每次重建后都必须重新执行并验证。长期方案仍是升级到仓库验证过的 Compose 版本。
 
-测试环境 Dashboard 应从生产 JSON 派生，只调整标题、环境标签、集群显示名和默认 namespace。UID、查询表达式、All 通配值、500 行上限、折叠结构、级别颜色和 message 高亮逻辑必须保持一致，避免维护两套行为不同的大屏。
+测试环境 Dashboard 应从生产 JSON 派生，只调整标题、环境标签、集群显示名和默认 namespace。UID、查询表达式、All 通配值、500 行上限、折叠结构、级别颜色、message 高亮逻辑、Business Text 面板代码和隐藏变量必须保持一致，避免维护两套行为不同的大屏。
 
 ## 6. 回滚
 
 Grafana 13 会迁移 SQLite 和统一存储。回滚时：
 
 1. 停止并移走失败的新容器和已迁移数据目录。
-2. 恢复升级前 Compose、`.env`、插件目录和整个 `grafana-data`。
+2. 恢复升级前 Compose、`.env`、Dashboard、插件目录和整个 `grafana-data`。
 3. 使用精确旧镜像重建 Grafana。
 4. 验证历史 dashboard、数据源、用户登录和查询。
 
@@ -291,11 +285,12 @@ Grafana 13 会迁移 SQLite 和统一存储。回滚时：
 
 - Grafana 容器 `running/healthy` 且 `RestartCount=0`。
 - `/api/health` 返回预期版本和 `database=ok`。
-- `grafana cli plugins ls` 只有一个 VictoriaLogs 插件版本。
+- `grafana cli plugins ls` 同时显示 VictoriaLogs `0.31.0` 和 Business Text `6.3.0`，没有重复版本。
 - 启动日志确认 `GF_EXPLORE_DEFAULTTIMEOFFSET=15m`。
 - 升级后没有 `level=error`、panic、migration failed 或 invalid signature。
 - 内部和公网入口都验证成功。
 - 15 分钟日志和直方图请求为 200，并记录耗时。
+- 多条件表单编辑不触发查询，Apply/Reset、AND/OR、URL 恢复和 20 条边界均验证成功。
 - VictoriaLogs 并发触顶/超时计数没有异常增长。
 - 同机其他容器的启动时间未改变。
 - 备份 checksum 通过，测试容器和测试数据已清理。

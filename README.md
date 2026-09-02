@@ -2,7 +2,9 @@
 
 VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、存储、查询和可视化解决方案。
 
-当前验证基线：Vector `0.58.0`、VictoriaLogs `v1.52.0`、Grafana `13.2.0-ubuntu`、VictoriaLogs Grafana 插件 `0.31.0`。生产升级和故障排查请先阅读 [采集延迟运行手册](docs/vector-victorialogs-latency-runbook.md) 与 [查询性能运行手册](docs/grafana-victorialogs-query-performance-runbook.md)。研发日志检索大屏的导入、字段契约、验证和回滚见 [生产日志检索大屏配置与导入指南](docs/grafana-victorialogs-log-search-dashboard-guide.md)。
+当前验证基线：Vector `0.58.0`、VictoriaLogs `v1.52.0`、Grafana `13.2.0-ubuntu`、VictoriaLogs datasource `0.31.0`、Business Text `6.3.0`。Grafana 插件采用版本化宿主机 release 目录和只读挂载，与 Grafana 镜像解耦，正式启动不联网安装。
+
+生产升级和故障排查请先阅读 [AI Agent 配置与验收指南](docs/ai-agent-operations-guide.md)、[采集延迟运行手册](docs/vector-victorialogs-latency-runbook.md) 与 [查询性能运行手册](docs/grafana-victorialogs-query-performance-runbook.md)。日志检索大屏的字段契约、验证和回滚见 [生产日志检索大屏配置与导入指南](docs/grafana-victorialogs-log-search-dashboard-guide.md)。
 
 ## 🏗️ 系统架构
 
@@ -28,6 +30,19 @@ VVG (Vector → VictoriaLogs → Grafana) 是一个高性能的日志收集、�
 - **📊 可视化**: Grafana 提供强大的日志查询和可视化功能
 - **🔍 智能解析**: 自动识别 Nginx 和 Java 日志格式
 - **🔄 可靠传输**: 持久磁盘缓冲、背压和可回滚升级，后端短时维护不主动丢新日志
+- **🧩 多条件检索**: message 包含/不包含、全局 AND/OR、显式 Apply/Reset、URL 状态恢复
+- **⚡ 查询保护**: 默认 15 分钟、All 展开为 `*`、明细 500 行、输入期间零查询
+- **🔒 可审计插件**: 精确版本、SHA-256、不可变 release、只读挂载和原子回滚
+
+## 🖥️ 界面预览
+
+生产与测试共享同一 Dashboard 逻辑。以下截图来自脱敏演示环境，实时计数仅用于展示布局。
+
+![VVG 日志检索大屏总览](docs/images/vvg-dashboard-overview.png)
+
+多条件 message 过滤器支持逐行添加、包含/不包含和全局 AND/OR。编辑期间不查询，点击“应用过滤”后统一刷新四个面板。
+
+![VVG message 多条件过滤器](docs/images/vvg-message-filter-builder.png)
 
 ## 📋 支持的日志格式
 
@@ -85,11 +100,8 @@ docker-compose up -d
 ```bash
 cd docker-compose/grafana
 cp env.example .env
-# 编辑 .env 文件，设置 VictoriaLogs 服务器地址
-docker build \
-  --build-arg GRAFANA_VERSION=13.2.0-ubuntu \
-  --build-arg VICTORIALOGS_PLUGIN_VERSION=0.31.0 \
-  -t vvg-grafana:13.2.0-plugin0.31.0 .
+# 编辑 .env，设置 VictoriaLogs 地址、管理员密码、数据目录和固定镜像
+sudo bash ../../scripts/install-grafana-plugins.sh .env
 sudo mkdir -p /data/grafana/grafana-data
 sudo chown 472:472 /data/grafana/grafana-data
 docker compose --env-file .env up -d
@@ -165,42 +177,41 @@ kubectl logs -n logging -l app=vector --tail=50
 # 不需要 Docker，检查固定版本、危险默认值、凭据和关键基线
 bash scripts/validate-configs.sh --static
 
-# 需要 Docker；展开三套 Compose、构建 Grafana 插件镜像，
+# 需要 Docker；展开三套 Compose、构建并校验外置 Grafana 插件包，
 # 并用 Vector 0.58 实际校验 Docker 与两套 K8S 配置
 bash scripts/validate-configs.sh --runtime
 ```
 
 Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验。`.env`、`服务器信息.txt` 和运行数据目录不得提交到仓库。
 
+已有 Grafana 迁移、隔离验证、Chrome 验收和回滚流程见 [VVG AI Agent 配置、升级与验收指南](docs/ai-agent-operations-guide.md)。
+
 ## 📁 项目结构
 
 ```
-├── docker-compose/                 # Docker Compose 配置
-│   ├── victorialogs/              # VictoriaLogs 日志存储
-│   │   ├── docker-compose.yml
-│   │   ├── env.example           # 环境变量配置模板
-│   │   └── README.md             # 部署说明
-│   ├── grafana/                   # Grafana 可视化
-│   │   ├── Dockerfile             # 构建期预装固定版本插件
+├── docker-compose/
+│   ├── victorialogs/               # VictoriaLogs 存储
+│   ├── grafana/
+│   │   ├── dashboards/             # 生产 Dashboard JSON
+│   │   ├── datasources/            # datasource provisioning
+│   │   ├── panel-templates/        # 生成的 Business Text 面板模板
 │   │   ├── docker-compose.yml
 │   │   ├── env.example
-│   │   ├── datasources/          # 数据源配置
-│   │   ├── dashboards/           # 仪表板配置
 │   │   └── README.md
-│   └── vector/                    # Vector 日志收集
-│       ├── docker-compose.yml
-│       ├── env.example
-│       ├── vector.yaml           # Vector 配置文件
-│       └── README.md
-├── k8s-deployment/                 # Kubernetes 部署配置 ⭐
-│   ├── vector-k8s-docker-cri.yaml    # Docker CRI 环境配置
-│   ├── vector-k8s-containerd-cri.yaml # Containerd CRI 环境配置
-│   └── README.md                  # K8S 部署说明
-├── docs/                          # 文档与运行手册
-├── scripts/                       # 统一配置校验
-├── .github/workflows/             # PR/主分支自动校验
-├── LICENSE                        # 开源协议
-└── README.md                      # 项目说明
+│   └── vector/                     # Docker Vector
+├── k8s-deployment/                 # Docker CRI / Containerd CRI Vector
+├── scripts/
+│   ├── install-grafana-plugins.sh  # 原子发布外置插件 release
+│   ├── render-vvg-message-filter.mjs
+│   ├── validate-vvg-message-filter.mjs
+│   └── validate-configs.sh
+├── docs/
+│   ├── images/                     # 脱敏界面截图
+│   └── ai-agent-operations-guide.md
+├── AGENTS.md                       # AI Agent 全仓库约束
+├── .github/workflows/              # PR/main 自动校验
+├── LICENSE
+└── README.md
 ```
 
 ## ⚙️ 配置说明
