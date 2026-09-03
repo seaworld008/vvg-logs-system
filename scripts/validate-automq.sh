@@ -39,6 +39,7 @@ validate_static() {
       "${root}/scripts/load-test-kafka.sh" \
       "${root}/scripts/consumer-watchdog.sh" \
       "${root}/scripts/healthcheck-kafka.sh" \
+      "${root}/scripts/test-gateway-large-event.sh" \
       "${root}/config/automq-consumer-watchdog.service" \
       "${root}/config/automq-consumer-watchdog.timer" \
       "${root}/config/obs-lifecycle.json" \
@@ -360,6 +361,8 @@ validate_runtime() {
   pass "AutoMQ Compose expands with both rollout profiles"
   validate_vector "${root}/config/vector-vvg-consumer.yaml" 9598
   validate_vector "${root}/config/vector-gateway-consumer.yaml" 9599
+  VECTOR_IMAGE=timberio/vector:0.58.0-alpine \
+    bash "${root}/scripts/test-gateway-large-event.sh"
 
   python3 -c 'import yaml' >/dev/null 2>&1 || {
     printf 'PyYAML from scripts/requirements-automq.txt is required\n' >&2
