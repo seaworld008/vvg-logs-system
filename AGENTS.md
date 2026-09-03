@@ -10,7 +10,8 @@
 4. `docs/grafana-victorialogs-query-performance-runbook.md`
 5. `docs/grafana-victorialogs-log-search-dashboard-guide.md`
 6. ClickHouse 网关链路任务再读 `docs/vector-clickhouse-gateway-runbook.md`
-7. 即将修改的 Compose、环境变量示例、Dashboard 生成器和校验脚本
+7. MCP 任务再读 `docker-compose/mcp-victorialogs/README.md`
+8. 即将修改的 Compose、环境变量示例、Dashboard 生成器和校验脚本
 
 ## 不可破坏的基线
 
@@ -23,6 +24,18 @@
 - 测试和生产使用同一查询逻辑、面板代码、颜色和限制；只允许标题、集群显示名、环境标签和默认 namespace 不同。
 - 只改获批服务。Grafana 变更不得顺带升级 VictoriaLogs、Vector 或业务服务。
 - ClickHouse 网关链路固定 Dashboard UID `vvg-clickhouse-gateway` 和 datasource UID `gateway-clickhouse`；默认最近 15 分钟、自动刷新关闭、明细 500 行。
+
+## VictoriaLogs MCP 专区
+
+`docker-compose/mcp-victorialogs/` 使用官方 `mcp-victorialogs` 和官方 `vmauth`，不得复制实现 VictoriaLogs 查询 API 或自建另一套 MCP 协议服务。
+
+- 测试和生产使用同一镜像 digest、工具集合、资源限制和查询保护，但必须部署两个实例并固定各自 VictoriaLogs 地址、租户和独立 Token；禁止用客户端 Header 或参数切换环境。
+- 只暴露 `vmauth`。MCP 容器不得直接发布宿主机端口，`MCP_PASSTHROUGH_HEADERS` 必须保持未设置。
+- 外部 MCP 请求必须使用独立 Bearer Token。MCP 到 VictoriaLogs 的内部 Token 与外部 Token 不得复用。
+- 只开放 `query`、`hits`、`field_names`、`field_values` 和 `stats_query`。日志查询最多 500 行，字段值最多 100，后端超时不超过 20 秒，MCP 后端查询并发固定为 1。
+- `AccountID` 和 `ProjectID` 必须由 `vmauth` 覆盖，禁止信任工具参数中的租户值；只允许批准的 `/select/logsql/*` 路径，禁止写入、管理、flags 和 metrics 路径代理到 VictoriaLogs。
+- 主机部署目录固定为 `/data/vvg-mcp`。`.env`、`vmauth/auth.yml` 和 `secrets/client-bearer-token` 必须留在目标机、限制权限并被 Git 忽略。
+- 单文件 bind mount 通过原子替换更新后必须只重建 `vmauth`，不能假定 HUP 会切换到新 inode。
 
 ## Vector -> ClickHouse -> Grafana 专区
 

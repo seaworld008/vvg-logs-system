@@ -1,0 +1,52 @@
+users:
+  - name: vvg-mcp-client
+    bearer_token: "__MCP_CLIENT_BEARER_TOKEN__"
+    max_concurrent_requests: 4
+    url_map:
+      - src_paths:
+          - "/mcp"
+        url_prefix:
+          - "http://mcp-victorialogs:8081"
+
+  - name: vvg-mcp-backend
+    bearer_token: "__VL_PROXY_BEARER_TOKEN__"
+    max_concurrent_requests: 1
+    headers:
+      - "AccountID: __VL_ACCOUNT_ID__"
+      - "ProjectID: __VL_PROJECT_ID__"
+    url_map:
+      # Preserve requests up to 500 rows; clamp missing or larger limits to 500.
+      - src_paths:
+          - "/select/logsql/query"
+        src_query_args:
+          - "limit=~([1-9]|[1-9][0-9]|[1-4][0-9][0-9]|500)"
+        url_prefix:
+          - "__VICTORIALOGS_URL__/?timeout=20s"
+      - src_paths:
+          - "/select/logsql/query"
+        url_prefix:
+          - "__VICTORIALOGS_URL__/?limit=500&timeout=20s"
+      - src_paths:
+          - "/select/logsql/hits"
+        url_prefix:
+          - "__VICTORIALOGS_URL__/?fields_limit=20&timeout=20s"
+      - src_paths:
+          - "/select/logsql/stats_query"
+        url_prefix:
+          - "__VICTORIALOGS_URL__/?timeout=20s"
+      - src_paths:
+          - "/select/logsql/field_names"
+        url_prefix:
+          - "__VICTORIALOGS_URL__/?limit=100&timeout=15s"
+      - src_paths:
+          - "/select/logsql/field_values"
+        url_prefix:
+          - "__VICTORIALOGS_URL__/?limit=100&timeout=15s"
+
+unauthorized_user:
+  url_map:
+    - src_paths:
+        - "/health/liveness"
+        - "/health/readiness"
+      url_prefix:
+        - "http://mcp-victorialogs:8081"

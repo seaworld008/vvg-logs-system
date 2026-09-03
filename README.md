@@ -6,7 +6,13 @@ VVG 是本仓库的核心日志系统，面向应用原始日志检索、Java �
 Vector -> VictoriaLogs -> Grafana
 ```
 
-核心验证基线：Vector `0.58.0`、VictoriaLogs `v1.52.0`、Grafana `13.2.0-ubuntu`、VictoriaLogs datasource `0.31.0`、Business Text `6.3.0`。Grafana 插件采用版本化宿主机 release 目录和只读挂载，与 Grafana 镜像解耦，正式启动不联网安装。
+面向 AI Agent 的受控只读查询链路为：
+
+```text
+MCP Client -> mcp-victorialogs -> vmauth -> VictoriaLogs
+```
+
+核心验证基线：Vector `0.58.0`、VictoriaLogs `v1.52.0`、Grafana `13.2.0-ubuntu`、VictoriaLogs datasource `0.31.0`、Business Text `6.3.0`、VictoriaLogs MCP `v1.9.0`、vmauth `v1.151.0`。Grafana 插件采用版本化宿主机 release 目录和只读挂载，与 Grafana 镜像解耦，正式启动不联网安装。
 
 仓库后半部分另提供独立的 [Gateway 结构化日志分析附加方案](#附加方案gateway-结构化日志分析)。该方案使用 ClickHouse，不与 VVG 的 VictoriaLogs 原始日志链路混合部署或混合变更。
 
@@ -17,6 +23,7 @@ Vector -> VictoriaLogs -> Grafana
 - [查询性能与升级运行手册](docs/grafana-victorialogs-query-performance-runbook.md)
 - [Vector/VictoriaLogs 延迟排查运行手册](docs/vector-victorialogs-latency-runbook.md)
 - [AI Agent 配置、升级与验收指南](docs/ai-agent-operations-guide.md)
+- [VictoriaLogs MCP 部署说明](docker-compose/mcp-victorialogs/README.md)
 
 ## VVG 核心架构
 
@@ -122,7 +129,21 @@ docker compose --env-file .env up -d
 
 详细说明: [Grafana 部署文档](docker-compose/grafana/README.md)
 
-#### 3. 部署 Vector (日志收集)
+#### 3. 部署 VictoriaLogs MCP（可选）
+
+MCP 使用独立 Compose 项目，不重建 Grafana、VictoriaLogs 或 Vector。测试和生产分别部署，临时内网入口为 `http://HOST:8081/mcp`，并强制 Bearer Token。
+
+```bash
+cd docker-compose/mcp-victorialogs
+cp env.example .env
+# 将官方固定镜像镜像到私库，渲染独立 Token 和 vmauth/auth.yml
+docker compose --env-file .env config --quiet
+docker compose --env-file .env up -d
+```
+
+详细说明：[VictoriaLogs MCP 部署文档](docker-compose/mcp-victorialogs/README.md)
+
+#### 4. 部署 Vector (日志收集)
 
 在每台需要收集日志的应用服务器上:
 
@@ -136,7 +157,7 @@ docker-compose up -d
 
 详细说明: [Vector 部署文档](docker-compose/vector/README.md)
 
-#### 4. Kubernetes 部署 (可选) ⭐
+#### 5. Kubernetes 部署 (可选) ⭐
 
 在 Kubernetes 环境中部署 Vector 进行日志收集:
 
@@ -211,6 +232,7 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 │   │   ├── docker-compose.yml
 │   │   ├── env.example
 │   │   └── README.md
+│   ├── mcp-victorialogs/           # 官方 MCP + vmauth 查询保护
 │   └── vector/                     # Docker Vector
 ├── k8s-deployment/                 # Docker CRI / Containerd CRI Vector
 ├── clickhouse-gateway/             # 附加方案：Gateway -> Vector -> ClickHouse -> Grafana
@@ -295,6 +317,7 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 
 - [VictoriaLogs 部署说明](docker-compose/victorialogs/README.md)
 - [Grafana 部署说明](docker-compose/grafana/README.md)
+- [VictoriaLogs MCP 部署说明](docker-compose/mcp-victorialogs/README.md)
 - [Vector 部署说明](docker-compose/vector/README.md)
 - [Kubernetes 部署说明](k8s-deployment/README.md)
 
