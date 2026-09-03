@@ -456,6 +456,48 @@ dashboard.templating.list = dashboard.templating.list.map((item) => ({
   label: compactVariableLabels.get(item.name) ?? item.label,
 }));
 
+const trendPanel = dashboard.panels.find(({ id }) => id === 3);
+if (!trendPanel) throw new Error("VVG log volume panel is missing");
+trendPanel.maxDataPoints = 100;
+trendPanel.options = {
+  ...trendPanel.options,
+  legend: {
+    calcs: ["sum"],
+    displayMode: "list",
+    placement: "bottom",
+    showLegend: true,
+  },
+};
+trendPanel.fieldConfig.defaults.custom = {
+  ...trendPanel.fieldConfig.defaults.custom,
+  axisSoftMin: 0,
+  barWidthFactor: 0.8,
+  drawStyle: "bars",
+  fillOpacity: 80,
+  showPoints: "never",
+  stacking: { group: "A", mode: "normal" },
+};
+trendPanel.transformations = [
+  {
+    id: "renameByRegex",
+    options: {
+      regex: '^\\{"level":"([^"]+)"\\}$',
+      renamePattern: "$1",
+    },
+  },
+];
+
+const trendTarget = trendPanel.targets?.find(({ refId }) => refId === "A");
+if (!trendTarget) throw new Error("VVG log volume query is missing");
+Object.assign(trendTarget, {
+  expr: "namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw}",
+  fields: ["level"],
+  legendFormat: "{{level}}",
+  queryType: "hits",
+  step: "$__interval",
+  supportingQueryType: "logsVolume",
+});
+
 for (const item of dashboard.panels) {
   for (const target of item.targets ?? []) {
     if (!target.expr?.includes("_msg:$message")) continue;
@@ -464,9 +506,9 @@ for (const item of dashboard.panels) {
       .replace(" _msg:$message", " _msg:$message ${message_filter_expr:raw}");
   }
 }
-dashboard.version = 13;
+dashboard.version = 14;
 
 await mkdir(dirname(panelPath), { recursive: true });
 await writeFile(panelPath, `${JSON.stringify(panel, null, 2)}\n`, "utf8");
 await writeFile(dashboardPath, `${JSON.stringify(dashboard, null, 2)}\n`, "utf8");
-console.log("Rendered Business Text message filter and VVG log search dashboard version 13");
+console.log("Rendered Business Text message filter and VVG log search dashboard version 14");

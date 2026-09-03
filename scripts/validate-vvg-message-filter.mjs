@@ -103,7 +103,7 @@ assert.throws(
   /高级过滤只允许 LogsQL 过滤条件/,
 );
 
-assert.equal(dashboard.version, 13);
+assert.equal(dashboard.version, 14);
 const dashboardPanel = dashboard.panels.find(({ id }) => id === panelTemplate.id);
 assert.ok(dashboardPanel, "dashboard must embed the message filter panel");
 assert.deepEqual(dashboardPanel.options, panelTemplate.options);
@@ -126,6 +126,43 @@ assert.deepEqual(dashboard.panels.find(({ id }) => id === 3).gridPos, {
   x: 0,
   y: 8,
 });
+
+const trendPanel = dashboard.panels.find(({ id }) => id === 3);
+const trendTarget = trendPanel.targets.find(({ refId }) => refId === "A");
+assert.equal(trendPanel.maxDataPoints, 100);
+assert.deepEqual(trendPanel.options.legend, {
+  calcs: ["sum"],
+  displayMode: "list",
+  placement: "bottom",
+  showLegend: true,
+});
+assert.equal(trendPanel.fieldConfig.defaults.custom.axisSoftMin, 0);
+assert.equal(trendPanel.fieldConfig.defaults.custom.barWidthFactor, 0.8);
+assert.equal(trendPanel.fieldConfig.defaults.custom.drawStyle, "bars");
+assert.equal(trendPanel.fieldConfig.defaults.custom.fillOpacity, 80);
+assert.equal(trendPanel.fieldConfig.defaults.custom.showPoints, "never");
+assert.deepEqual(trendPanel.fieldConfig.defaults.custom.stacking, {
+  group: "A",
+  mode: "normal",
+});
+assert.deepEqual(trendPanel.transformations, [
+  {
+    id: "renameByRegex",
+    options: {
+      regex: '^\\{"level":"([^"]+)"\\}$',
+      renamePattern: "$1",
+    },
+  },
+]);
+assert.equal(
+  trendTarget.expr,
+  "namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw}",
+);
+assert.equal(trendTarget.queryType, "hits");
+assert.equal(trendTarget.supportingQueryType, "logsVolume");
+assert.deepEqual(trendTarget.fields, ["level"]);
+assert.equal(trendTarget.step, "$__interval");
+assert.doesNotMatch(trendTarget.expr, /\|\s*stats/);
 
 for (const [name, defaultValue] of [
   ["message_filter_expr", "*"],
@@ -154,4 +191,4 @@ for (const { expr } of filteredTargets) {
   assert.match(expr, /_msg:\$message \$\{message_filter_expr:raw\}/);
 }
 
-console.log("PASS: VVG dynamic message filter panel and expression builder validate");
+console.log("PASS: VVG message filter and Explore-style Logs volume validate");

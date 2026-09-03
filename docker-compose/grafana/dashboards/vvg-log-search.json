@@ -240,9 +240,9 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
+            "barWidthFactor": 0.8,
             "drawStyle": "bars",
-            "fillOpacity": 22,
+            "fillOpacity": 80,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -265,7 +265,8 @@
             },
             "thresholdsStyle": {
               "mode": "off"
-            }
+            },
+            "axisSoftMin": 0
           },
           "mappings": [],
           "thresholds": {
@@ -418,8 +419,8 @@
           "calcs": [
             "sum"
           ],
-          "displayMode": "table",
-          "placement": "right",
+          "displayMode": "list",
+          "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
@@ -436,15 +437,29 @@
             "uid": "victorialogs-ds"
           },
           "editorMode": "code",
-          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw} | stats by (level) count() as logs",
+          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw}",
           "legendFormat": "{{level}}",
-          "queryType": "statsRange",
+          "queryType": "hits",
           "refId": "A",
-          "step": "$__interval"
+          "step": "$__interval",
+          "fields": [
+            "level"
+          ],
+          "supportingQueryType": "logsVolume"
         }
       ],
       "title": "日志趋势（按级别）",
-      "type": "timeseries"
+      "type": "timeseries",
+      "maxDataPoints": 100,
+      "transformations": [
+        {
+          "id": "renameByRegex",
+          "options": {
+            "regex": "^\\{\"level\":\"([^\"]+)\"\\}$",
+            "renamePattern": "$1"
+          }
+        }
+      ]
     },
     {
       "collapsed": false,
@@ -735,6 +750,6 @@
   "timezone": "browser",
   "title": "VVG 生产日志检索大屏",
   "uid": "vvg-log-search",
-  "version": 13,
+  "version": 14,
   "weekStart": "monday"
 }
