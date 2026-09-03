@@ -50,8 +50,8 @@ services:
       VVG_TOPIC: ${VVG_TOPIC}
       GATEWAY_TOPIC: ${GATEWAY_TOPIC}
       KAFKA_HEAP_OPTS: >-
-        -Xms1536m -Xmx1536m -XX:MetaspaceSize=96m
-        -XX:MaxDirectMemorySize=2304m
+        -Xms1024m -Xmx1024m -XX:MetaspaceSize=96m
+        -XX:MaxDirectMemorySize=1536m
       KAFKA_JVM_PERFORMANCE_OPTS: >-
         -server -XX:+UseZGC -XX:ZCollectionInterval=5
     command: ["bash", "/opt/automq-deploy/start-automq.sh"]

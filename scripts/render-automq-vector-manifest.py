@@ -37,7 +37,7 @@ ManifestDumper.add_representer(str, represent_readable_string)
 PRODUCER_STALL_CHECK_SCRIPT = r"""#!/bin/sh
 set -eu
 
-state_file=/tmp/automq-producer-last-sent
+state_file=/tmp/automq-producer-last-queue
 metrics_url="http://127.0.0.1:${AUTOMQ_METRICS_PORT}/metrics"
 broker="${AUTOMQ_BOOTSTRAP_SERVERS%%,*}"
 
@@ -57,16 +57,17 @@ sent="$(printf '%s\n' "${metrics}" | awk '
 ')"
 
 previous="$(cat "${state_file}" 2>/dev/null || true)"
-printf '%s\n' "${sent}" > "${state_file}"
+printf '%s\n' "${queued}" > "${state_file}"
 
 if [ "${queued}" -lt "${AUTOMQ_STALL_BUFFER_THRESHOLD_BYTES}" ]; then
   exit 0
 fi
-if [ -z "${previous}" ] || [ "${sent}" -gt "${previous}" ]; then
+if [ -z "${previous}" ] || [ "${queued}" -lt "${previous}" ]; then
   exit 0
 fi
 
-printf 'Kafka producer stalled: queued=%s sent=%s\n' "${queued}" "${sent}" >&2
+printf 'Kafka producer not draining: queued=%s previous=%s sent=%s\n' \
+  "${queued}" "${previous}" "${sent}" >&2
 exit 1
 """
 

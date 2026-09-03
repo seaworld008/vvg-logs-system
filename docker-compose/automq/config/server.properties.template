@@ -34,9 +34,9 @@ s3.data.buckets=0@s3://__AUTOMQ_OBS_BUCKET__?region=__AUTOMQ_OBS_REGION__&endpoi
 s3.ops.buckets=1@s3://__AUTOMQ_OBS_BUCKET__?region=__AUTOMQ_OBS_REGION__&endpoint=__AUTOMQ_OBS_ENDPOINT__
 s3.wal.path=0@s3://__AUTOMQ_OBS_BUCKET__?region=__AUTOMQ_OBS_REGION__&endpoint=__AUTOMQ_OBS_ENDPOINT__&batchInterval=250&maxBytesInBatch=8388608
 s3.stream.allocator.policy=POOLED_DIRECT
-s3.wal.cache.size=805306368
-s3.block.cache.size=268435456
-s3.wal.upload.threshold=268435456
+s3.wal.cache.size=524288000
+s3.block.cache.size=104857600
+s3.wal.upload.threshold=62914560
 s3.telemetry.metrics.exporter.type=prometheus
 s3.metrics.exporter.prom.host=0.0.0.0
 s3.metrics.exporter.prom.port=8890

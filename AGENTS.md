@@ -58,7 +58,7 @@
 
 - 生产镜像必须先进入受控 Harbor/SWR并固定 tag 与 digest；正式启动不得在线拉取。
 - 当前单节点、共享宿主机和单 OBS 桶是用户明确接受的受控例外，不得描述为官方生产高可用架构，也不得复制到其他环境作为默认值。
-- AutoMQ 固定 `3 CPU / 6 GiB`，Heap 1.5 GiB、Direct Memory 2.25 GiB、WAL cache 768 MiB、Block cache 256 MiB、upload threshold 256 MiB；不得取消 cgroup 边界或添加 Swap。
+- AutoMQ 固定 `3 CPU / 6 GiB`，使用官方 Tiny 内存参数：Heap 1 GiB、Direct Memory 1.5 GiB、WAL cache 500 MiB、Block cache 100 MiB、upload threshold 60 MiB；不得取消 cgroup 边界或添加 Swap。
 - data/ops/WAL 可复用同一物理桶但必须使用固定 bucket ID `0/1/0`；禁止把 OBS 普通文件夹当作 bucket prefix。桶必须 private、标准存储、SSE-OBS，且不能用生命周期提前删除活跃对象。
 - 对华为云 OBS 不设置 `checksumAlgorithm`；必须完成小对象、multipart、读取校验、删除和 Broker 重启验证。
 - Kafka 外部入口只绑定 VPC 内网地址，VPC 内工作负载可达，不配置源 IP 白名单，也不得发布公网；使用 `SASL_PLAINTEXT + SCRAM-SHA-512`，关闭自动建 Topic，producer/consumer/admin 使用独立用户和 ACL。

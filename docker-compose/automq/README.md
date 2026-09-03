@@ -23,7 +23,7 @@ Vector 直写 VictoriaLogs/ClickHouse 配置，以减少组件与故障面；直
 - Kafka protocol `3.9.1`；
 - Vector `0.58.0-alpine`；
 - vmagent `v1.147.0`；
-- AutoMQ `3 CPU / 6 GiB`，Heap 1.5 GiB、Direct Memory 2.25 GiB；
+- AutoMQ `3 CPU / 6 GiB`，官方 Tiny 内存参数（Heap 1 GiB、Direct Memory 1.5 GiB）；
 - VVG Topic 12 partitions，Gateway Topic 6 partitions；
 - 单条 4 MiB、Zstd、72 小时 retention、replication factor 1；
 - `SASL_PLAINTEXT + SCRAM-SHA-512`，关闭自动建 Topic；

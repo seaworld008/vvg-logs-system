@@ -57,11 +57,11 @@ const barGauge = (id, name, layout, targets) =>
   panel(id, "barGauge", name, layout, targets);
 
 const dashboard = {
-  name: "AutoMQ Production Cluster",
+  name: "AutoMQ Logs - Production",
   tags: "automq production logs",
   note: "AutoMQ log buffer health, throughput, lag and recovery signals.",
   ident: "automq-production-cluster",
-  uuid: 1788455364871000,
+  uuid: 1788455364871001,
   configs: {
     version: "3.4.0",
     links: [],

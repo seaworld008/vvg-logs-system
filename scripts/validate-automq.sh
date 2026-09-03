@@ -88,12 +88,16 @@ validate_static() {
     "vmagent reads the VictoriaMetrics password from a secret file"
   forbid_regex "${compose}" 'remoteWrite\.basicAuth\.(username|password)=' \
     "vmagent Compose contains no inline remote-write credentials"
-  require_literal "${server}" 's3.wal.cache.size=805306368' \
-    "AutoMQ WAL cache matches the 6 GiB profile"
-  require_literal "${server}" 's3.block.cache.size=268435456' \
-    "AutoMQ block cache matches the 6 GiB profile"
-  require_literal "${server}" 's3.wal.upload.threshold=268435456' \
-    "AutoMQ upload threshold is at most one third of WAL cache"
+  require_literal "${server}" 's3.wal.cache.size=524288000' \
+    "AutoMQ WAL cache uses the official Tiny value"
+  require_literal "${server}" 's3.block.cache.size=104857600' \
+    "AutoMQ block cache uses the official Tiny value"
+  require_literal "${server}" 's3.wal.upload.threshold=62914560' \
+    "AutoMQ upload threshold uses the official Tiny value"
+  require_literal "${compose}" '-Xms1024m -Xmx1024m' \
+    "AutoMQ heap uses the official Tiny value"
+  require_literal "${compose}" '-XX:MaxDirectMemorySize=1536m' \
+    "AutoMQ direct memory uses the official Tiny value"
   require_literal "${server}" 's3.data.buckets=0@s3://__AUTOMQ_OBS_BUCKET__' \
     "AutoMQ data uses bucket ID 0"
   require_literal "${server}" 's3.ops.buckets=1@s3://__AUTOMQ_OBS_BUCKET__' \
@@ -148,8 +152,18 @@ validate_static() {
     "Kafka load gate does not discard records during transient recovery"
   require_literal "${root}/scripts/consumer-watchdog.sh" '[[ "${failures}" -ge 2 ]]' \
     "Consumer watchdog requires two consecutive inactive checks"
-  require_literal "${root}/scripts/consumer-watchdog.sh" 'docker restart -t 120' \
-    "Consumer watchdog performs a graceful restart"
+  require_literal "${root}/scripts/consumer-watchdog.sh" 'docker restart -t 120 "${id}" >/dev/null &' \
+    "Consumer watchdog restarts group members gracefully and in parallel"
+  if python3 - "${root}/scripts/consumer-watchdog.sh" <<'PY'
+import sys
+text = open(sys.argv[1], encoding="utf-8").read()
+assert text.index("vector-gateway-production") < text.index("vector-vvg-production")
+PY
+  then
+    pass "Consumer watchdog prioritizes the production Gateway group"
+  else
+    fail "Consumer watchdog must check Gateway before VVG"
+  fi
   require_literal "${root}/scripts/healthcheck-kafka.sh" "! grep -Eq 'Leader: (-1|none)'" \
     "Broker health requires both business topics to have leaders"
   require_literal "${compose}" 'start_period: 5m' \
@@ -286,6 +300,8 @@ PY
     "Kafka producer stall detection requires three consecutive failures"
   require_literal "scripts/render-automq-vector-manifest.py" 'if ! nc -z -w 2' \
     "Kafka producer stall detector does not restart while the broker is unreachable"
+  require_literal "scripts/render-automq-vector-manifest.py" '[ "${queued}" -lt "${previous}" ]' \
+    "Kafka producer stall detector requires a high queue to drain"
   require_literal "scripts/render-automq-vector-manifest.py" '"mountPath": "/opt/automq-health/producer-stall-check.sh"' \
     "Kafka producer stall detector is mounted as human-readable ConfigMap content"
   require_literal "scripts/render-automq-vector-manifest.py" '"linger.ms": "100"' \

@@ -18,7 +18,9 @@ Kibana、Elasticsearch，以及夜莺的 `redis-v9` 均不在本次变更范围�
   buffer 和容器日志保留窗口；OBS 不能替代可用的 Controller。
 - data、ops 和 WAL 使用同一个 OBS 物理桶，分别用 bucket ID `0`、`1`、`0`。
   不使用普通 OBS 文件夹模拟 bucket prefix。
-- 当前共享宿主机只有 4 CPU/16 GiB。AutoMQ 限制为 3 CPU/6 GiB，不得临时取消
+- 当前共享宿主机只有 4 CPU/16 GiB。AutoMQ 限制为 3 CPU/6 GiB，使用官方 Tiny
+  内存参数：Heap 1 GiB、Direct Memory 1.5 GiB、WAL cache 500 MiB、Block cache
+  100 MiB、upload threshold 60 MiB；不得临时取消
   cgroup 边界；可用内存低于 3 GiB或既有 ClickHouse/Grafana 延迟恶化时禁止主切。
 - Kafka 批次使用 Zstd，以降低 VPC、WAL 和 OBS 容量；通过 500-event producer 批次、
   4 MiB consumer 预取和 2 GiB VVG consumer 上限控制解码放大，不通过关闭压缩规避。
@@ -148,10 +150,17 @@ Controller、S3 request error、Kafka request error、consumer lag、producer qu
   获取完整 Topic/leader 元数据。consumer 的低预取队列配合 `fetch.queue.backoff.ms=100`。
 - Vector 0.58 的 producer 在实测中仍可能停留在旧的 `Leader: -1` 会话。producer Pod
   使用保守 liveness 兜底：Broker 不可达时不重启；仅当 Broker 已可达、Kafka disk
-  buffer 超过正常抖动阈值且发送计数连续 90 秒不增长时才重启。buffer 位于 hostPath，
+  buffer 超过正常抖动阈值且队列连续 90 秒没有下降时才重启。只检查发送计数是否偶尔
+  增长会漏掉“连接存在但追赶吞吐接近零”的半卡死状态。buffer 位于 hostPath，
   新 Pod 必须从同一 ledger 继续排空。
+- Consumer watchdog 先检查 Gateway，再检查 VVG；同一 group 的多个 consumer 并行
+  执行 120 秒优雅重启。禁止让影子 VVG 的串行停止窗口阻塞正式 Gateway 的恢复。
 - Broker 健康不能只验证 Kafka API 端口；combined KRaft 重启时端口可能先于业务
   partition leader 就绪。健康检查必须同时确认两个业务 Topic 均无 `Leader: -1`。
+- 6 GiB 容器内把 Heap、Direct、WAL 和 Block 按比例放大，在真实 Gateway 主切和 VVG
+  积压追赶中两次触发 cgroup OOM。最终保留 3 CPU/6 GiB cgroup，但恢复官方 Tiny 内存
+  参数，为 native、线程栈、ZGC、网络和冷读瞬时内存保留约 3 GiB；不得只按各显式
+  缓存之和小于容器上限来估算内存。
 - Gateway 先完整读取并解析超长多行 JSON，再把脱敏结构化事件送 Kafka。不得在解析前
   截断；解析后超过 4 MiB时直写 ClickHouse fallback，且凭据来自 Kubernetes Secret。
 - 生成清单的多行 VRL/命令必须使用 YAML `|` block scalar，并把配置 SHA-256 放入

@@ -20,7 +20,8 @@ check_group() {
   local service="$1"
   local group="$2"
   local counter_file="${state_dir}/${service}.failures"
-  local ids active failures
+  local ids active failures id
+  local -a restart_pids=()
   ids="$(docker ps --filter label=com.docker.compose.project=automq \
     --filter "label=com.docker.compose.service=${service}" --format '{{.ID}}')"
   if [[ -z "${ids}" ]]; then
@@ -40,19 +41,25 @@ check_group() {
   printf '%s\n' "${failures}" > "${counter_file}"
   if [[ "${failures}" -ge 2 ]]; then
     printf 'Restarting %s: Kafka group %s has no active member\n' "${service}" "${group}"
-    # shellcheck disable=SC2086
-    docker restart -t 120 ${ids} >/dev/null
+    while IFS= read -r id; do
+      [[ -n "${id}" ]] || continue
+      docker restart -t 120 "${id}" >/dev/null &
+      restart_pids+=("$!")
+    done <<<"${ids}"
+    for id in "${restart_pids[@]}"; do
+      wait "${id}"
+    done
     printf '0\n' > "${counter_file}"
   fi
 }
 
-if docker ps --filter label=com.docker.compose.service=vector-vvg-production -q | grep -q .; then
-  check_group vector-vvg-production vvg-victorialogs-production-v1
-else
-  check_group vector-vvg-shadow "${VVG_CONSUMER_GROUP}"
-fi
 if docker ps --filter label=com.docker.compose.service=vector-gateway-production -q | grep -q .; then
   check_group vector-gateway-production gateway-clickhouse-production-v1
 else
   check_group vector-gateway-shadow "${GATEWAY_CONSUMER_GROUP}"
+fi
+if docker ps --filter label=com.docker.compose.service=vector-vvg-production -q | grep -q .; then
+  check_group vector-vvg-production vvg-victorialogs-production-v1
+else
+  check_group vector-vvg-shadow "${VVG_CONSUMER_GROUP}"
 fi
