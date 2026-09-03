@@ -55,6 +55,7 @@ Gateway stdout -> Vector 0.58 -> ClickHouse 26.8 LTS -> Grafana
 - **🔍 智能解析**: 自动识别 Nginx 和 Java 日志格式
 - **🔄 可靠传输**: 持久磁盘缓冲、背压和可回滚升级，后端短时维护不主动丢新日志
 - **🧩 多条件检索**: message 包含/不包含、全局 AND/OR、显式 Apply/Reset、URL 状态恢复
+- **📈 清晰趋势**: 复用 Explore Logs volume 的连续时间桶，宽时间范围仍保持可读柱形
 - **⚡ 查询保护**: 默认 15 分钟、All 展开为 `*`、明细 500 行、输入期间零查询
 - **🔒 可审计插件**: 精确版本、SHA-256、不可变 release、只读挂载和原子回滚
 

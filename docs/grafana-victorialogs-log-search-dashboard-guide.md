@@ -106,6 +106,7 @@ Grafana 的展开行会包含它后面的面板，直到遇到下一个 `row` �
 ### 4.3 紧凑布局
 
 - 左侧趋势图宽度为 `19/24`，高度为 8；右侧两个统计面板宽度为 `5/24`，高度各 4。
+- 趋势图复用 Explore `Logs volume` 的连续时间桶和底部图例；最多约 100 个桶，避免宽时间范围下出现不可见的亚像素柱。
 - 数字字号固定为 28。
 - 统计面板关闭小型背景趋势图。
 - 日志明细保留 20 个网格单位高度。
@@ -152,12 +153,15 @@ ${message_filter_expr:raw}
 
 ### 5.3 按级别趋势
 
+趋势面板使用 VictoriaLogs datasource 的 `hits` / `logsVolume` 查询类型，并按 `level` 字段分组；这是 Grafana Explore `Logs volume` 使用的同一条数据路径。面板把最大数据点固定为 100，由 `$__interval` 随时间范围自动计算桶宽，并保留空桶为零，因此 15 分钟、3 小时或更长的可选范围都能显示清晰且连续的柱形。
+
 ```logsql
 namespace:=$namespace container:=$service pod:=$pod level:=$level
 _msg:$message
 ${message_filter_expr:raw}
-| stats by (level) count() as logs
 ```
+
+不要把该面板改回 `statsRange | stats by (level) count()`。该形式只返回有命中的稀疏时间点；在 3 小时范围和宽面板中曾自动降到 5 秒步长，单柱小于一个屏幕像素，虽然图例总数正确但图形区域近似空白。
 
 ### 5.4 message 为什么使用 word filter
 

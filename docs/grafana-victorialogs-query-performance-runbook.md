@@ -18,6 +18,8 @@ Browser
         -> /select/logsql/hits   日志量直方图
 ```
 
+Dashboard 的日志趋势也应复用这条 `/hits` 路径。VictoriaLogs datasource 查询模型固定为 `queryType: hits`、`supportingQueryType: logsVolume`、`fields: ["level"]`，面板固定 `maxDataPoints: 100`，由 `$__interval` 随时间范围生成约 100 个连续时间桶。
+
 默认时间范围越大、查询越宽泛，两个后端请求扫描的数据越多，浏览器还要渲染更多行和直方图。因此仓库默认值为：
 
 - 新 Explore 页面：最近 15 分钟。
@@ -138,6 +140,16 @@ docker logs --since 2h victorialogs 2>&1 | grep -Ei 'slow query|timeout|panic|er
 3. 默认时间范围、返回行数和 LogsQL 已收窄。
 
 每次只提高一个小档位并复测 P95/P99。并发计数从未触顶时，提高上限只会增加潜在资源争用。
+
+### 3.5 图例有总数但趋势图近似空白
+
+先在浏览器 Query inspector 或网络请求中比较趋势面板与 Explore `Logs volume`：
+
+- 异常形式通常是 `queryType: statsRange`、`step` 只有数秒，并且响应只包含非零的稀疏时间点；总数计算仍正确，但宽时间窗中的单柱可能小于一个屏幕像素。
+- 正常形式是 `queryType: hits`、`supportingQueryType: logsVolume`、`fields: ["level"]` 和 `maxDataPoints: 100`；响应包含约 100 个连续桶，空时段补零，柱形在 15 分钟和 3 小时范围都清晰。
+- 验收时同时比较趋势序列总和、匹配日志数和日志明细命中，三者应使用同一组 namespace、service、Pod、level 和 message 过滤条件。
+
+不要只提高 `fillOpacity` 或固定像素柱宽来掩盖问题。根因在查询分桶时，应先改回 Explore 的日志量数据路径，再调整颜色和图例布局。
 
 ## 4. LogsQL 常见错误
 

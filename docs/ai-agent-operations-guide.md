@@ -180,7 +180,8 @@ docker compose up -d --no-deps --force-recreate grafana
 7. 已知命中词在日志明细中显示黄色高亮。
 8. 5 条条件保持行式布局并在面板内滚动；20 条边界由自动测试和 UI共同约束。
 9. 浏览器控制台无插件预加载或运行错误。
-10. 最终恢复最近 15 分钟、零条件、自动刷新关闭。
+10. 3 小时范围的日志趋势使用 `hits` / `logsVolume`、约 100 个连续时间桶，柱体清晰可见，底部图例总数与统计面板一致。
+11. 最终恢复最近 15 分钟、零条件、自动刷新关闭。
 
 ## 9. 服务端验收
 
@@ -198,6 +199,8 @@ docker compose up -d --no-deps --force-recreate grafana
 - HTTP 200 的插件 `module.js` 仍可能因 React/Grafana 版本不兼容而执行失败；必须看 Chrome 控制台。
 - Grafana API 返回的 Dashboard `version` 是数据库修订计数，不等同于源 JSON 的 `version`。
 - Business Text 的“应用过滤”在标准 `now-N` 到 `now` 滑动窗口中，先原地推进 `context.grafana.timeRange`，再让 `message_filter_expr` 在原表达式和等价括号表达式之间切换，以保证单次变量刷新。不要在这条路径追加 `context.grafana.refresh()`，否则四个日志面板会产生两轮查询。带取整的相对时间使用官方刷新兜底；绝对时间范围保持不变。Grafana 或 Business Text 升级后必须重新做请求数量、时间戳和括号 LogsQL 验收。
+- 趋势图图例有正确总数但绘图区近似空白时，先检查请求模型和时间桶，不要误判为无日志。`statsRange` 配合宽面板可能按数秒返回数百个仅含非零值的稀疏点，柱宽低于一个像素；Dashboard 应复用 Explore 的 `hits` / `logsVolume`、`fields: ["level"]` 和 `maxDataPoints: 100`，得到约 100 个包含零值的连续桶。
+- 主动停止 Grafana 时可能记录一次 `job cleanup controller failed` / `context canceled`。先把该行时间与容器新的 `StartedAt` 比较；若它发生在启动前，且启动后严重错误为零、健康和 datasource 均正常，应归类为关停噪声，不要据此回滚。
 - 远端缺少 Python 不代表 JSON 无法验证；本地解析后比较 SHA 即可。
 - 浏览器中的“转圈”不等于 VictoriaLogs 并发不足；先看请求状态和后端耗时。
 
