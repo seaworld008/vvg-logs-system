@@ -29,6 +29,11 @@ VVG 直写基线位于 `k8s-deployment/vector-k8s-containerd-cri.yaml`，Gateway
 `clickhouse-gateway/vector/vector-k8s-containerd.yaml`。它们既是较小规模环境的推荐配置，
 也是 AutoMQ 主链路的第一回滚入口，必须与缓冲层方案一起维护和验证。
 
+![AutoMQ 原生夜莺大屏脱敏预览](docs/images/automq-dashboard-overview.png)
+
+上图使用示例值展示 AutoMQ 原生夜莺大屏结构；不包含生产地址、账号、消费组、桶名或
+运行数据。大屏和告警属于金龄云 SaaS 日志系统，生产导入时放入对应业务组。
+
 ## 快速入口
 
 - [快速开始](#快速开始)

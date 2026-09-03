@@ -17,5 +17,9 @@ group. This is a native Nightingale dashboard. Do not use the Grafana
 compatibility importer for the final Nightingale copy because transformed table
 panels are downgraded to the unsupported `unknown` type.
 
+The repository-level `docs/images/automq-dashboard-overview.png` is a sanitized
+layout preview with example values. Never replace it with a live production
+screenshot or runtime data.
+
 The bundled vmagent scrape configuration labels the local node-exporter target
 with `automq_host="true"`, so host resource alerts do not match other nodes.
