@@ -45,6 +45,7 @@ validate_static() {
       "${root}/config/obs-lifecycle.json" \
       "${root}/config/prometheus.yml.template" \
       "${root}/monitoring/nightingale/automq-cluster.json" \
+      "docs/decisions/0002-automq-object-storage-log-buffer.md" \
       "scripts/render-automq-vector-manifest.py" \
       "scripts/render-automq-nightingale-dashboard.mjs" \
       "scripts/requirements-automq.txt"; do
@@ -280,6 +281,9 @@ PY
   require_literal "${root}/README.md" \
     '不能把它扩大为' \
     "AutoMQ README does not overstate end-to-end delivery guarantees"
+  require_literal "docs/decisions/0002-automq-object-storage-log-buffer.md" \
+    '至少 3 个独立 Controller/Broker 节点' \
+    "AutoMQ ADR records the high-availability upgrade trigger"
   forbid_regex "${gateway}" 'requestHeaders|responseHeaders|requestBody|responseBody' \
     "Gateway consumer cannot persist raw headers or bodies"
   require_literal "scripts/requirements-automq.txt" 'PyYAML==6.0.3' \

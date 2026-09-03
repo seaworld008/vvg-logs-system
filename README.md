@@ -334,6 +334,7 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 - [Grafana 部署说明](docker-compose/grafana/README.md)
 - [VictoriaLogs MCP 部署说明](docker-compose/mcp-victorialogs/README.md)
 - [AutoMQ + OBS 日志缓冲层运行手册](docs/automq-log-buffer-runbook.md)
+- [架构决策 ADR-002：AutoMQ 对象存储日志缓冲层](docs/decisions/0002-automq-object-storage-log-buffer.md)
 - [Vector 部署说明](docker-compose/vector/README.md)
 - [Kubernetes 部署说明](k8s-deployment/README.md)
 
