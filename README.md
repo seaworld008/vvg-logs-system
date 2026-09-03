@@ -1,36 +1,24 @@
 # VVG 日志收集系统
 
-VVG 是一个高性能的日志收集、存储、查询和可视化仓库，包含两条边界清晰的生产方案：
-
-- `Vector -> VictoriaLogs -> Grafana`：应用原始日志检索、多行日志和 message 条件过滤；
-- `Vector -> ClickHouse -> Grafana`：Gateway 结构化访问日志、QPS/PV/UV、状态码、延迟和多维分析。
-
-当前验证基线：Vector `0.58.0`、VictoriaLogs `v1.52.0`、ClickHouse `26.8.2.7-alpine`、Grafana `13.2.0-ubuntu`、VictoriaLogs datasource `0.31.0`、Grafana ClickHouse datasource `4.5.1`、Business Text `6.3.0`。Grafana 插件采用版本化宿主机 release 目录和只读挂载，与 Grafana 镜像解耦，正式启动不联网安装。
-
-生产升级和故障排查请先阅读 [AI Agent 配置与验收指南](docs/ai-agent-operations-guide.md)。VictoriaLogs 链路使用[采集延迟运行手册](docs/vector-victorialogs-latency-runbook.md)与[查询性能运行手册](docs/grafana-victorialogs-query-performance-runbook.md)；ClickHouse 网关链路使用[独立部署专区](clickhouse-gateway/README.md)和[运行手册](docs/vector-clickhouse-gateway-runbook.md)。
-
-## Gateway 结构化日志分析
-
-`clickhouse-gateway/` 来自经过生产升级、数据副本验证和持续观察的 Gateway 案例，提供单文件 ClickHouse Compose、Kubernetes Vector、月分区表结构、Grafana datasource、DB-IP GeoIP 和完整 65 面板 KubeDoor Gateway Dashboard。模板不会携带现场地址或凭据，并通过 CI 阻止有限重试、无界 system log、非持久 buffer、`latest`、华为云下载链接和真实环境标识回流仓库。
+VVG 是本仓库的核心日志系统，面向应用原始日志检索、Java 多行日志、message 多条件过滤和可视化排障。主链路为：
 
 ```text
-Gateway stdout -> Vector 0.58 -> ClickHouse 26.8 LTS -> Grafana
-                     |               |
-                     |               +-- 月分区 / 紧凑主键 / 30 天业务 TTL
-                     +-- checkpoint / 1 GiB disk buffer / 180 秒可靠重试 / GeoIP
+Vector -> VictoriaLogs -> Grafana
 ```
 
-快速入口：
+核心验证基线：Vector `0.58.0`、VictoriaLogs `v1.52.0`、Grafana `13.2.0-ubuntu`、VictoriaLogs datasource `0.31.0`、Business Text `6.3.0`。Grafana 插件采用版本化宿主机 release 目录和只读挂载，与 Grafana 镜像解耦，正式启动不联网安装。
 
-- [Vector -> ClickHouse -> Grafana 部署专区](clickhouse-gateway/README.md)
-- [生产盘点、升级、隔离验证和回滚手册](docs/vector-clickhouse-gateway-runbook.md)
-- [架构决策 ADR-001](docs/decisions/0001-vector-clickhouse-gateway.md)
+仓库后半部分另提供独立的 [Gateway 结构化日志分析附加方案](#附加方案gateway-结构化日志分析)。该方案使用 ClickHouse，不与 VVG 的 VictoriaLogs 原始日志链路混合部署或混合变更。
 
-以下截图来自生产案例的脱敏只读视图，域名、项目名和地址均已替换为示例值：
+## 快速入口
 
-![Gateway ClickHouse 日志分析大屏](docs/images/clickhouse-gateway-overview.png)
+- [快速开始](#快速开始)
+- [生产日志检索大屏配置与导入指南](docs/grafana-victorialogs-log-search-dashboard-guide.md)
+- [查询性能与升级运行手册](docs/grafana-victorialogs-query-performance-runbook.md)
+- [Vector/VictoriaLogs 延迟排查运行手册](docs/vector-victorialogs-latency-runbook.md)
+- [AI Agent 配置、升级与验收指南](docs/ai-agent-operations-guide.md)
 
-## 🏗️ 系统架构
+## VVG 核心架构
 
 ```
 ┌─────────────────────┐    ┌──────────────────────┐     ┌─────────────────────┐
@@ -46,7 +34,7 @@ Gateway stdout -> Vector 0.58 -> ClickHouse 26.8 LTS -> Grafana
          :8686                       :9428                       :3000
 ```
 
-## ✨ 核心特性
+## 核心特性
 
 - **🚀 高性能**: VictoriaLogs 提供极高的写入和查询性能
 - **📦 轻量级**: 相比 ELK 栈，资源占用更少
@@ -59,7 +47,7 @@ Gateway stdout -> Vector 0.58 -> ClickHouse 26.8 LTS -> Grafana
 - **⚡ 查询保护**: 默认 15 分钟、All 展开为 `*`、明细 500 行、输入期间零查询
 - **🔒 可审计插件**: 精确版本、SHA-256、不可变 release、只读挂载和原子回滚
 
-## 🖥️ 界面预览
+## 界面预览
 
 生产与测试共享同一 Dashboard 逻辑。以下截图来自脱敏演示环境，实时计数仅用于展示布局。
 
@@ -69,7 +57,7 @@ Gateway stdout -> Vector 0.58 -> ClickHouse 26.8 LTS -> Grafana
 
 ![VVG message 多条件过滤器](docs/images/vvg-message-filter-builder.png)
 
-## 📋 支持的日志格式
+## 支持的日志格式
 
 ### Nginx 日志
 - **Access Log**: 标准格式和 JSON 格式
@@ -83,7 +71,7 @@ Gateway stdout -> Vector 0.58 -> ClickHouse 26.8 LTS -> Grafana
 - **双层处理**: 容器运行时层 + 应用层多行处理 ⭐
 - **JSON 格式**: 结构化 Java 日志
 
-## 🚀 快速开始
+## 快速开始
 
 本系统支持多种部署方式，可根据实际环境选择合适的部署架构。
 
@@ -211,7 +199,7 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 
 已有 Grafana 迁移、隔离验证、Chrome 验收和回滚流程见 [VVG AI Agent 配置、升级与验收指南](docs/ai-agent-operations-guide.md)。
 
-## 📁 项目结构
+## 项目结构
 
 ```
 ├── docker-compose/
@@ -225,7 +213,7 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 │   │   └── README.md
 │   └── vector/                     # Docker Vector
 ├── k8s-deployment/                 # Docker CRI / Containerd CRI Vector
-├── clickhouse-gateway/             # Gateway -> Vector -> ClickHouse -> Grafana 专区
+├── clickhouse-gateway/             # 附加方案：Gateway -> Vector -> ClickHouse -> Grafana
 │   ├── clickhouse/                 # 单文件 Compose、TTL 和表结构
 │   ├── vector/                     # containerd Vector DaemonSet
 │   └── grafana/                    # datasource 与 Dashboard
@@ -243,7 +231,7 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 └── README.md
 ```
 
-## ⚙️ 配置说明
+## 配置说明
 
 ### 环境变量配置
 
@@ -262,7 +250,7 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 - Kubernetes 环境中 Vector 能访问 VictoriaLogs 服务
 - 配置正确的防火墙规则
 
-## 🔧 自定义配置
+## 自定义配置
 
 ### 日志格式定制
 
@@ -293,27 +281,59 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
   - 保留真实事件时间，不使用 `rewrite_timestamp` 掩盖积压
 - **Grafana**: Explore 默认15分钟、最多500行、60秒数据源超时
 
-## 📖 文档
+## VVG 主系统文档
 
-- [故障排查指南](docs/troubleshooting.md)
-- [Vector/VictoriaLogs 延迟排查与升级运行手册](docs/vector-victorialogs-latency-runbook.md)
+使用与排障：
+
+- [生产日志检索大屏配置与导入指南](docs/grafana-victorialogs-log-search-dashboard-guide.md)
 - [Grafana/VictoriaLogs 查询性能与升级运行手册](docs/grafana-victorialogs-query-performance-runbook.md)
-- [VictoriaLogs 部署说明](docker-compose/victorialogs/README.md)
-- [Grafana 部署说明](docker-compose/grafana/README.md)  
-- [Vector 部署说明](docker-compose/vector/README.md)
-- [Kubernetes 部署说明](k8s-deployment/README.md) ⭐
-- [Gateway ClickHouse 完整方案](clickhouse-gateway/README.md)
-- [Vector/ClickHouse/Grafana 运行手册](docs/vector-clickhouse-gateway-runbook.md)
+- [Vector/VictoriaLogs 延迟排查与升级运行手册](docs/vector-victorialogs-latency-runbook.md)
+- [故障排查指南](docs/troubleshooting.md)
+- [AI Agent 配置、升级与验收指南](docs/ai-agent-operations-guide.md)
 
-## 🤝 贡献
+部署说明：
+
+- [VictoriaLogs 部署说明](docker-compose/victorialogs/README.md)
+- [Grafana 部署说明](docker-compose/grafana/README.md)
+- [Vector 部署说明](docker-compose/vector/README.md)
+- [Kubernetes 部署说明](k8s-deployment/README.md)
+
+字段模板参考：
+
+- [研发现场日志查询与过滤参考](docs/grafana-victorialogs-研发现场日志查询%20&%20过滤手册.md)：包含可选结构化字段示例，使用前应按当前日志字段核对。
+
+## 附加方案：Gateway 结构化日志分析
+
+`clickhouse-gateway/` 是独立的 Gateway 访问日志方案，提供单文件 ClickHouse Compose、Kubernetes Vector、月分区表结构、Grafana datasource、DB-IP GeoIP 和完整 65 面板 KubeDoor Gateway Dashboard。当前附加方案基线为 ClickHouse `26.8.2.7-alpine` 和 Grafana ClickHouse datasource `4.5.1`。
+
+该模板不会携带现场地址或凭据，并通过 CI 阻止有限重试、无界 system log、非持久 buffer、`latest`、华为云下载链接和真实环境标识回流仓库。
+
+```text
+Gateway stdout -> Vector 0.58 -> ClickHouse 26.8 LTS -> Grafana
+                     |               |
+                     |               +-- 月分区 / 紧凑主键 / 30 天业务 TTL
+                     +-- checkpoint / 1 GiB disk buffer / 180 秒可靠重试 / GeoIP
+```
+
+附加方案文档：
+
+- [Vector -> ClickHouse -> Grafana 部署专区](clickhouse-gateway/README.md)
+- [生产盘点、升级、隔离验证和回滚手册](docs/vector-clickhouse-gateway-runbook.md)
+- [架构决策 ADR-001](docs/decisions/0001-vector-clickhouse-gateway.md)
+
+以下截图来自生产案例的脱敏只读视图，域名、项目名和地址均已替换为示例值：
+
+![Gateway ClickHouse 日志分析大屏](docs/images/clickhouse-gateway-overview.png)
+
+## 贡献
 
 欢迎提交 Issue 和 Pull Request！
 
-## 📄 许可证
+## 许可证
 
 本项目采用 [MIT 许可证](LICENSE)。
 
-## 🔗 相关链接
+## 相关链接
 
 - [VictoriaLogs 官方文档](https://docs.victoriametrics.com/VictoriaLogs/)
 - [Vector 官方文档](https://vector.dev/docs/)

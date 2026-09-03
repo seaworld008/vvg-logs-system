@@ -97,6 +97,22 @@ validate_static() {
     "README displays the message filter builder"
   require_literal "README.md" 'docs/ai-agent-operations-guide.md' \
     "README links the AI agent operations guide"
+  require_literal "README.md" 'docs/grafana-victorialogs-研发现场日志查询%20&%20过滤手册.md' \
+    "README links the developer query quick reference"
+  local readme_core_line
+  local readme_docs_line
+  local readme_gateway_line
+  readme_core_line="$(grep -nF '## VVG 核心架构' README.md | head -n 1 | cut -d: -f1)"
+  readme_docs_line="$(grep -nF '## VVG 主系统文档' README.md | head -n 1 | cut -d: -f1)"
+  readme_gateway_line="$(grep -nF '## 附加方案：Gateway 结构化日志分析' README.md | head -n 1 | cut -d: -f1)"
+  if [[ -n "${readme_core_line}" && -n "${readme_docs_line}" \
+      && -n "${readme_gateway_line}" \
+      && "${readme_core_line}" -lt "${readme_gateway_line}" \
+      && "${readme_docs_line}" -lt "${readme_gateway_line}" ]]; then
+    pass "README prioritizes the VVG log system before the Gateway add-on"
+  else
+    fail "README must place VVG architecture and documentation before the Gateway add-on"
+  fi
   tracked_sensitive="$(git ls-files | grep -E '(^|/)(\.env|服务器信息\.txt)$' || true)"
   if [[ -n "${tracked_sensitive}" ]]; then
     printf '%s\n' "${tracked_sensitive}" >&2
