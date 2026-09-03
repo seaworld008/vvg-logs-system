@@ -43,7 +43,9 @@ validate_static() {
       "${root}/config/automq-consumer-watchdog.timer" \
       "${root}/config/obs-lifecycle.json" \
       "${root}/config/prometheus.yml.template" \
+      "${root}/monitoring/nightingale/automq-cluster.json" \
       "scripts/render-automq-vector-manifest.py" \
+      "scripts/render-automq-nightingale-dashboard.mjs" \
       "scripts/requirements-automq.txt"; do
     require_file "${file}" "AutoMQ deliverable exists: ${file}"
   done
@@ -240,6 +242,21 @@ validate_static() {
     "Lag alerts use the exported Vector metric name"
   require_literal "${root}/monitoring/alert-rules.yml" 'vector_buffer_size_bytes' \
     "Producer queue alert covers disk buffer size"
+  if python3 - "${root}/monitoring/nightingale/automq-cluster.json" <<'PY'
+import json, sys
+dashboard = json.load(open(sys.argv[1], encoding="utf-8"))
+assert dashboard["ident"] == "automq-production-cluster"
+panels = dashboard["configs"]["panels"]
+assert len(panels) >= 12
+assert all(panel["type"] != "unknown" for panel in panels)
+assert any("vector_kafka_consumer_lag" in target["expr"] for panel in panels for target in panel["targets"])
+assert any("vector_buffer_size_bytes" in target["expr"] for panel in panels for target in panel["targets"])
+PY
+  then
+    pass "Nightingale dashboard uses supported panels and covers lag and producer buffers"
+  else
+    fail "Nightingale dashboard structure is invalid"
+  fi
   forbid_regex "${gateway}" 'requestHeaders|responseHeaders|requestBody|responseBody' \
     "Gateway consumer cannot persist raw headers or bodies"
   require_literal "scripts/requirements-automq.txt" 'PyYAML==6.0.3' \

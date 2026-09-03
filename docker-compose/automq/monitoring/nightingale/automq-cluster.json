@@ -1,0 +1,850 @@
+{
+  "name": "AutoMQ Production Cluster",
+  "tags": "automq production logs",
+  "note": "AutoMQ log buffer health, throughput, lag and recovery signals.",
+  "ident": "automq-production-cluster",
+  "uuid": 1788455364871000,
+  "configs": {
+    "version": "3.4.0",
+    "links": [],
+    "var": [
+      {
+        "type": "query",
+        "name": "cluster_id",
+        "label": "Cluster",
+        "allOption": false,
+        "multi": false,
+        "reg": "",
+        "hide": false,
+        "definition": "label_values(kafka_broker_active_count,job)",
+        "datasource": {
+          "cate": "prometheus",
+          "value": "${datasource}"
+        }
+      },
+      {
+        "type": "datasource",
+        "name": "datasource",
+        "label": "Data Source",
+        "definition": "prometheus",
+        "hide": false
+      }
+    ],
+    "panels": [
+      {
+        "version": "3.4.0",
+        "id": "automq-controller",
+        "type": "stat",
+        "name": "Active Controller",
+        "links": [],
+        "layout": {
+          "h": 6,
+          "w": 4,
+          "x": 0,
+          "y": 0,
+          "i": "automq-controller"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(kafka_controller_active_count{job=\"$cluster_id\"})",
+            "legend": "controller"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "none"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "textMode": "value",
+          "calc": "lastNotNull",
+          "colorMode": "value"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-broker",
+        "type": "stat",
+        "name": "Active Broker",
+        "links": [],
+        "layout": {
+          "h": 6,
+          "w": 4,
+          "x": 4,
+          "y": 0,
+          "i": "automq-broker"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(kafka_broker_active_count{job=\"$cluster_id\"})",
+            "legend": "broker"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "none"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "textMode": "value",
+          "calc": "lastNotNull",
+          "colorMode": "value"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-fenced",
+        "type": "stat",
+        "name": "Fenced Broker",
+        "links": [],
+        "layout": {
+          "h": 6,
+          "w": 4,
+          "x": 8,
+          "y": 0,
+          "i": "automq-fenced"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(kafka_broker_fenced_count{job=\"$cluster_id\"}) or vector(0)",
+            "legend": "fenced"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              },
+              {
+                "color": "#F2495C",
+                "value": 1
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "none"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "textMode": "value",
+          "calc": "lastNotNull",
+          "colorMode": "value"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-topics",
+        "type": "stat",
+        "name": "Topics",
+        "links": [],
+        "layout": {
+          "h": 6,
+          "w": 4,
+          "x": 12,
+          "y": 0,
+          "i": "automq-topics"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(kafka_topic_count{job=\"$cluster_id\"})",
+            "legend": "topics"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "none"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "textMode": "value",
+          "calc": "lastNotNull",
+          "colorMode": "value"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-partitions",
+        "type": "stat",
+        "name": "Partitions",
+        "links": [],
+        "layout": {
+          "h": 6,
+          "w": 4,
+          "x": 16,
+          "y": 0,
+          "i": "automq-partitions"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(kafka_partition_total_count{job=\"$cluster_id\"})",
+            "legend": "partitions"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "none"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "textMode": "value",
+          "calc": "lastNotNull",
+          "colorMode": "value"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-size",
+        "type": "stat",
+        "name": "Stored Log Bytes",
+        "links": [],
+        "layout": {
+          "h": 6,
+          "w": 4,
+          "x": 20,
+          "y": 0,
+          "i": "automq-size"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(max by(topic,partition) (kafka_log_size{job=\"$cluster_id\"}))",
+            "legend": "bytes"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "bytesIEC"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "textMode": "value",
+          "calc": "lastNotNull",
+          "colorMode": "value"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-network",
+        "type": "timeseries",
+        "name": "Broker Bytes In / Out",
+        "links": [],
+        "layout": {
+          "h": 10,
+          "w": 12,
+          "x": 0,
+          "y": 6,
+          "i": "automq-network"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(rate(kafka_broker_network_io_bytes_total{job=\"$cluster_id\",direction=\"in\"}[$__rate_interval]))",
+            "legend": "in"
+          },
+          {
+            "refId": "B",
+            "expr": "sum(rate(kafka_broker_network_io_bytes_total{job=\"$cluster_id\",direction=\"out\"}[$__rate_interval]))",
+            "legend": "out"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "bytesSIps"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "fillOpacity": 0.2,
+          "stack": "off"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-requests",
+        "type": "timeseries",
+        "name": "Produce / Fetch Requests",
+        "links": [],
+        "layout": {
+          "h": 10,
+          "w": 12,
+          "x": 12,
+          "y": 6,
+          "i": "automq-requests"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(rate(kafka_request_count_total{job=\"$cluster_id\",type=\"Produce\"}[$__rate_interval]))",
+            "legend": "produce"
+          },
+          {
+            "refId": "B",
+            "expr": "sum(rate(kafka_request_count_total{job=\"$cluster_id\",type=\"Fetch\"}[$__rate_interval]))",
+            "legend": "fetch"
+          },
+          {
+            "refId": "C",
+            "expr": "sum(rate(kafka_request_error_count_total{job=\"$cluster_id\",error!=\"NONE\"}[$__rate_interval])) or vector(0)",
+            "legend": "errors"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "reqps"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "fillOpacity": 0.2,
+          "stack": "off"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-latency",
+        "type": "timeseries",
+        "name": "Kafka Request P99",
+        "links": [],
+        "layout": {
+          "h": 10,
+          "w": 12,
+          "x": 0,
+          "y": 16,
+          "i": "automq-latency"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "max(kafka_request_time_99p_milliseconds{job=\"$cluster_id\",type=\"Produce\"})",
+            "legend": "produce"
+          },
+          {
+            "refId": "B",
+            "expr": "max(kafka_request_time_99p_milliseconds{job=\"$cluster_id\",type=\"Fetch\"})",
+            "legend": "fetch"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "ms"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "fillOpacity": 0.2,
+          "stack": "off"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-topic-rate",
+        "type": "timeseries",
+        "name": "Topic Message Rate",
+        "links": [],
+        "layout": {
+          "h": 10,
+          "w": 12,
+          "x": 12,
+          "y": 16,
+          "i": "automq-topic-rate"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(topic) (rate(kafka_message_count_total{job=\"$cluster_id\",direction=\"in\"}[$__rate_interval]))",
+            "legend": "{{topic}} in"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "mps"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "fillOpacity": 0.2,
+          "stack": "off"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-consumer-lag",
+        "type": "timeseries",
+        "name": "Vector Consumer Lag",
+        "links": [],
+        "layout": {
+          "h": 10,
+          "w": 12,
+          "x": 0,
+          "y": 26,
+          "i": "automq-consumer-lag"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(consumer_group,topic) (clamp_min(vector_kafka_consumer_lag{partition_id!=\"-1\"},0))",
+            "legend": "{{consumer_group}} / {{topic}}"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "none"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "fillOpacity": 0.2,
+          "stack": "off"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-producer-buffer",
+        "type": "timeseries",
+        "name": "Vector Producer Disk Buffer",
+        "links": [],
+        "layout": {
+          "h": 10,
+          "w": 12,
+          "x": 12,
+          "y": 26,
+          "i": "automq-producer-buffer"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(component_id,host) (vector_buffer_size_bytes{component_type=\"kafka\",component_id=~\"automq(_lane_[ab])?\"})",
+            "legend": "{{host}} / {{component_id}}"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "bytesIEC"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "fillOpacity": 0.2,
+          "stack": "off"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-groups",
+        "type": "barGauge",
+        "name": "Consumer Group State",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 36,
+          "i": "automq-groups"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(kafka_group_count{job=\"$cluster_id\"})",
+            "legend": "total"
+          },
+          {
+            "refId": "B",
+            "expr": "sum(kafka_group_stable_count{job=\"$cluster_id\"})",
+            "legend": "stable"
+          },
+          {
+            "refId": "C",
+            "expr": "sum(kafka_group_empty_count{job=\"$cluster_id\"})",
+            "legend": "empty"
+          },
+          {
+            "refId": "D",
+            "expr": "sum(kafka_group_dead_count{job=\"$cluster_id\"})",
+            "legend": "dead"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "none"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "calc": "lastNotNull"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-s3",
+        "type": "timeseries",
+        "name": "Object Storage Operations",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 36,
+          "i": "automq-s3"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(operation_name,status) (rate(kafka_stream_operation_latency_count{operation_type=\"S3Request\"}[$__rate_interval]))",
+            "legend": "{{operation_name}} / {{status}}"
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "util": "reqps"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "fillOpacity": 0.2,
+          "stack": "off"
+        },
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      }
+    ]
+  }
+}

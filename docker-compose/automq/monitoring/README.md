@@ -10,5 +10,10 @@ producer/consumer and shared-host resource gates. Import the rules into the
 existing Nightingale business group after confirming its VictoriaMetrics
 datasource. Do not put notification tokens or real contact details in Git.
 
+Import `nightingale/automq-cluster.json` into the business group that owns the
+log system. This is a native Nightingale dashboard. Do not use the Grafana
+compatibility importer for the final Nightingale copy because transformed table
+panels are downgraded to the unsupported `unknown` type.
+
 The bundled vmagent scrape configuration labels the local node-exporter target
 with `automq_host="true"`, so host resource alerts do not match other nodes.
