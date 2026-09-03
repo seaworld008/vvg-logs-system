@@ -12,6 +12,9 @@ clickhouse-gateway/clickhouse/data/
 clickhouse-gateway/clickhouse/logs/
 clickhouse-gateway/**/secret.yaml
 clickhouse-gateway/vector/geoip/*.mmdb
+docker-compose/mcp-victorialogs/vmauth/auth.yml
+docker-compose/mcp-victorialogs/secrets/
+**/client-bearer-token
 
 # Local PR drafting artifact
 PR_BODY.md

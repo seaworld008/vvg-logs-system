@@ -75,6 +75,9 @@ validate_static() {
   local grafana_env="docker-compose/grafana/env.example"
   local grafana_datasource="docker-compose/grafana/datasources/victorialogs.yaml"
   local grafana_dashboard="docker-compose/grafana/dashboards/vvg-log-search.json"
+  local mcp_compose="docker-compose/mcp-victorialogs/docker-compose.yml"
+  local mcp_env="docker-compose/mcp-victorialogs/env.example"
+  local mcp_auth="docker-compose/mcp-victorialogs/vmauth/auth.example.yml"
   local victorialogs_compose="docker-compose/victorialogs/docker-compose.yml"
   local vector_config="docker-compose/vector/vector.yaml"
   local password_value
@@ -91,6 +94,8 @@ validate_static() {
     "Vector ClickHouse Gateway runbook exists"
   require_file "docs/images/vvg-dashboard-overview.png" "Sanitized dashboard overview exists"
   require_file "docs/images/vvg-message-filter-builder.png" "Sanitized message filter screenshot exists"
+  require_file "docker-compose/mcp-victorialogs/README.md" \
+    "VictoriaLogs MCP deployment guide exists"
   require_literal "README.md" 'docs/images/vvg-dashboard-overview.png' \
     "README displays the dashboard overview"
   require_literal "README.md" 'docs/images/vvg-message-filter-builder.png' \
@@ -113,6 +118,8 @@ validate_static() {
   else
     fail "README must place VVG architecture and documentation before the Gateway add-on"
   fi
+  require_literal "README.md" 'docker-compose/mcp-victorialogs/README.md' \
+    "README links the VictoriaLogs MCP deployment guide"
   tracked_sensitive="$(git ls-files | grep -E '(^|/)(\.env|服务器信息\.txt)$' || true)"
   if [[ -n "${tracked_sensitive}" ]]; then
     printf '%s\n' "${tracked_sensitive}" >&2
@@ -260,6 +267,41 @@ validate_static() {
   require_literal "docker-compose/vector/env.example" 'VECTOR_API_BIND=127.0.0.1' \
     "Docker Vector API binds to host loopback by default"
 
+  require_literal "${mcp_compose}" 'version: "2.4"' \
+    "VictoriaLogs MCP Compose stays compatible with the validated legacy host"
+  require_literal "${mcp_env}" 'mcp-victorialogs:v1.9.0@sha256:af6afb6e36f3678e9d5096d155372a33b8c3e45e9a5de756129c6e5628dbff9d' \
+    "VictoriaLogs MCP image uses a pinned release and digest"
+  require_literal "${mcp_env}" 'vmauth:v1.151.0@sha256:047f7bdccff16df457db488e0e1fbc5b3fd15470c5b5ff5fa38a85d4d6bd71df' \
+    "vmauth image uses a pinned release and digest"
+  require_literal "${mcp_compose}" 'MCP_SERVER_MODE: http' \
+    "VictoriaLogs MCP uses streamable HTTP mode"
+  require_literal "${mcp_compose}" 'MCP_DISABLED_TOOLS: documentation,flags,facets,streams,stream_ids,stream_field_names,stream_field_values,stats_query_range' \
+    "VictoriaLogs MCP exposes only the approved read-only tool set"
+  forbid_regex "${mcp_compose}" 'MCP_PASSTHROUGH_HEADERS' \
+    "VictoriaLogs MCP does not pass caller headers upstream"
+  require_literal "${mcp_compose}" 'read_only: true' \
+    "VictoriaLogs MCP services use read-only root filesystems"
+  require_literal "${mcp_compose}" 'mem_limit: 256m' \
+    "VictoriaLogs MCP memory usage is bounded"
+  require_literal "${mcp_auth}" 'max_concurrent_requests: 1' \
+    "VictoriaLogs MCP reserves only one backend query slot"
+  require_literal "${mcp_auth}" 'limit=~([1-9]|[1-9][0-9]|[1-4][0-9][0-9]|500)' \
+    "VictoriaLogs MCP preserves explicit log limits up to 500"
+  require_literal "${mcp_auth}" '?limit=500&timeout=20s' \
+    "VictoriaLogs MCP clamps missing or oversized log limits"
+  require_literal "${mcp_auth}" '?limit=100&timeout=15s' \
+    "VictoriaLogs MCP bounds field discovery"
+  require_literal "${mcp_auth}" 'AccountID: __VL_ACCOUNT_ID__' \
+    "vmauth fixes the VictoriaLogs account tenant"
+  require_literal "${mcp_auth}" 'ProjectID: __VL_PROJECT_ID__' \
+    "vmauth fixes the VictoriaLogs project tenant"
+  forbid_regex "${mcp_auth}" '/(insert|flags|metrics)(/|\")' \
+    "VictoriaLogs MCP proxy exposes no write or administrative backend paths"
+  require_literal ".gitignore" 'docker-compose/mcp-victorialogs/vmauth/auth.yml' \
+    "Rendered vmauth credentials are ignored"
+  require_literal ".gitignore" '**/client-bearer-token' \
+    "MCP client bearer tokens are ignored"
+
   if grep -R -n -E --include='*.yaml' --include='*.yml' \
       'drop_newest|rewrite_timestamp' docker-compose k8s-deployment >/dev/null; then
     fail "Active YAML must not drop newest logs or rewrite event timestamps"
@@ -274,10 +316,11 @@ validate_static() {
     pass "Compose baselines use pinned versions"
   fi
 
-  if grep -n '^version:' docker-compose/*/docker-compose.yml >/dev/null; then
+  if grep -n '^version:' docker-compose/*/docker-compose.yml \
+      | grep -v '^docker-compose/mcp-victorialogs/docker-compose.yml:' >/dev/null; then
     fail "Compose files must not use the obsolete top-level version field"
   else
-    pass "Compose files omit the obsolete top-level version field"
+    pass "Compose files omit the obsolete top-level version field except the validated legacy MCP deployment"
   fi
 
   if bash scripts/validate-clickhouse-gateway.sh --static; then
@@ -333,7 +376,7 @@ validate_runtime() {
   }
   docker compose version
 
-  for component in grafana victorialogs vector; do
+  for component in grafana victorialogs vector mcp-victorialogs; do
     docker compose \
       --env-file "docker-compose/${component}/env.example" \
       -f "docker-compose/${component}/docker-compose.yml" \
