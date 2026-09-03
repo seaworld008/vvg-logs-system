@@ -162,6 +162,8 @@ Controller、S3 request error、Kafka request error、consumer lag、producer qu
   参数，为 native、线程栈、ZGC、网络和冷读瞬时内存保留约 3 GiB；不得只按各显式
   缓存之和小于容器上限来估算内存。
 - Gateway 先完整读取并解析超长多行 JSON，再把脱敏结构化事件送 Kafka。不得在解析前
-  截断；解析后超过 4 MiB时直写 ClickHouse fallback，且凭据来自 Kubernetes Secret。
+  截断；`file.max_line_bytes` 显式设为 16 MiB，避免 Vector 默认 100 KiB 单行上限在
+  multiline/VRL 之前丢弃大 JSON。`max_read_bytes` 只控制文件间读取公平性，不能替代
+  单行上限。解析后超过 4 MiB时直写 ClickHouse fallback，且凭据来自 Kubernetes Secret。
 - 生成清单的多行 VRL/命令必须使用 YAML `|` block scalar，并把配置 SHA-256 放入
   Pod annotation，保证可读且 ConfigMap 变化会触发受控滚动。

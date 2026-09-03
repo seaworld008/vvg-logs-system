@@ -290,6 +290,8 @@ PY
     "VVG producer deterministically splits events without duplication"
   require_literal "scripts/render-automq-vector-manifest.py" '2147483648' \
     "Gateway producer uses a 2 GiB disk buffer"
+  require_literal "scripts/render-automq-vector-manifest.py" '["max_line_bytes"] = 16777216' \
+    "Gateway producer accepts raw lines up to 16 MiB before parsing"
   require_literal "scripts/render-automq-vector-manifest.py" '"batch": {"max_bytes": 1048576, "max_events": 500' \
     "Kafka producer batches keep throughput while limiting event-count amplification"
   require_literal "scripts/render-automq-vector-manifest.py" '"message_timeout_ms": 0' \

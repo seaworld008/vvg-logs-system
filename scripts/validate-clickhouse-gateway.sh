@@ -79,6 +79,8 @@ validate_static() {
     "Gateway Vector image is pinned"
   require_literal "${vector_manifest}" 'ignore_checkpoints: false' \
     "Gateway Vector resumes checkpoints"
+  require_literal "${vector_manifest}" 'max_line_bytes: 16777216' \
+    "Gateway Vector accepts raw lines up to 16 MiB before multiline parsing"
   require_literal "${vector_manifest}" 'path: /var/lib/vector-clickhouse-gateway' \
     "Gateway Vector state is persistent and isolated"
   require_literal "${vector_manifest}" 'type: directory' \

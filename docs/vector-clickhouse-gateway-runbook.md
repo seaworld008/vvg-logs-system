@@ -114,6 +114,11 @@ system log 表和版本迁移留下的 `*_0` 表可能远大于业务库。确�
 
 ## 7. Vector 与异步写入契约
 
+Gateway 原始 JSON 可能跨数千行或包含很长的单行 body。`file` source 必须在 multiline
+和 VRL 之前设置 `max_line_bytes: 16777216`；默认 100 KiB 会直接丢弃超长单行。
+`max_read_bytes` 仅用于多个文件间的读取公平性，不限制聚合后事件大小。解析和脱敏必须
+先完成，再决定写入 ClickHouse 或 AutoMQ；不得通过解析前截断来规避大事件。
+
 ClickHouse `async_insert=1` 与 `wait_for_async_insert=1` 可合并小批次，并且只在成功落盘后确认。Vector 的 request timeout 必须大于 ClickHouse `wait_for_async_insert_timeout`。已验证基线：
 
 ```yaml

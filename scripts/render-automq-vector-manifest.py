@@ -267,6 +267,8 @@ def render_vector_config(source: str, pipeline: str, mode: str) -> str:
         ]
         if not file_sources:
             raise SystemExit("Gateway source must contain at least one file source")
+        for source_name in file_sources:
+            config["sources"][source_name]["max_line_bytes"] = 16777216
         for transform in transforms.values():
             transform["inputs"] = [
                 "capture_automq_source_file" if item in file_sources else item
