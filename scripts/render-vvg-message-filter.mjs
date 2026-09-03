@@ -471,7 +471,7 @@ trendPanel.options = {
 trendPanel.fieldConfig.defaults.custom = {
   ...trendPanel.fieldConfig.defaults.custom,
   axisSoftMin: 0,
-  barWidthFactor: 0.8,
+  barWidthFactor: 0.6,
   drawStyle: "bars",
   fillOpacity: 80,
   showPoints: "never",
@@ -506,9 +506,9 @@ for (const item of dashboard.panels) {
       .replace(" _msg:$message", " _msg:$message ${message_filter_expr:raw}");
   }
 }
-dashboard.version = 14;
+dashboard.version = 15;
 
 await mkdir(dirname(panelPath), { recursive: true });
 await writeFile(panelPath, `${JSON.stringify(panel, null, 2)}\n`, "utf8");
 await writeFile(dashboardPath, `${JSON.stringify(dashboard, null, 2)}\n`, "utf8");
-console.log("Rendered Business Text message filter and VVG log search dashboard version 14");
+console.log("Rendered Business Text message filter and VVG log search dashboard version 15");

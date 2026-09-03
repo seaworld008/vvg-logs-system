@@ -240,7 +240,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.8,
+            "barWidthFactor": 0.6,
             "drawStyle": "bars",
             "fillOpacity": 80,
             "gradientMode": "none",
@@ -750,6 +750,6 @@
   "timezone": "browser",
   "title": "VVG 生产日志检索大屏",
   "uid": "vvg-log-search",
-  "version": 14,
+  "version": 15,
   "weekStart": "monday"
 }

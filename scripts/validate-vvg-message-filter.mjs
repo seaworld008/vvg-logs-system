@@ -103,7 +103,7 @@ assert.throws(
   /高级过滤只允许 LogsQL 过滤条件/,
 );
 
-assert.equal(dashboard.version, 14);
+assert.equal(dashboard.version, 15);
 const dashboardPanel = dashboard.panels.find(({ id }) => id === panelTemplate.id);
 assert.ok(dashboardPanel, "dashboard must embed the message filter panel");
 assert.deepEqual(dashboardPanel.options, panelTemplate.options);
@@ -137,7 +137,7 @@ assert.deepEqual(trendPanel.options.legend, {
   showLegend: true,
 });
 assert.equal(trendPanel.fieldConfig.defaults.custom.axisSoftMin, 0);
-assert.equal(trendPanel.fieldConfig.defaults.custom.barWidthFactor, 0.8);
+assert.equal(trendPanel.fieldConfig.defaults.custom.barWidthFactor, 0.6);
 assert.equal(trendPanel.fieldConfig.defaults.custom.drawStyle, "bars");
 assert.equal(trendPanel.fieldConfig.defaults.custom.fillOpacity, 80);
 assert.equal(trendPanel.fieldConfig.defaults.custom.showPoints, "never");
