@@ -62,4 +62,3 @@ disk buffer、自动恢复和备份只能缩小影响，不能把单节点变成
   隔离下游故障的主要价值。
 - 仅依靠客户端默认重连：实测长时间 leader 丢失后不足以保证自动追赶，因此保留
   rebootstrap、完整 metadata刷新、producer liveness 和 consumer watchdog。
-
