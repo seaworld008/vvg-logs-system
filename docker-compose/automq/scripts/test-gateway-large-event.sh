@@ -69,6 +69,7 @@ YAML
 
 docker run -d --name "${container}" \
   --network none \
+  --user "$(id -u):$(id -g)" \
   --memory 512m --memory-swap 512m --cpus 0.5 \
   -v "${work_dir}:/work" \
   "${vector_image}" --config /work/vector.yaml >/dev/null
