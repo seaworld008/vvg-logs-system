@@ -1,0 +1,249 @@
+x-logging: &default-logging
+  driver: local
+  options:
+    max-size: 20m
+    max-file: "5"
+
+x-vector-common: &vector-common
+  image: ${VECTOR_IMAGE}
+  pull_policy: never
+  restart: always
+  stop_grace_period: 2m
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  security_opt:
+    - no-new-privileges:true
+  networks:
+    - automq
+  logging: *default-logging
+
+services:
+  automq-init:
+    image: ${AUTOMQ_IMAGE}
+    pull_policy: never
+    user: "0:0"
+    read_only: true
+    command: ["bash", "/opt/automq-deploy/init-storage.sh"]
+    volumes:
+      - ./runtime:/etc/automq:ro
+      - ./scripts:/opt/automq-deploy:ro
+      - ./state/kraft:/var/lib/automq
+      - ./secrets:/run/secrets:ro
+    networks:
+      - automq
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  automq:
+    image: ${AUTOMQ_IMAGE}
+    pull_policy: never
+    container_name: automq
+    hostname: automq
+    restart: always
+    stop_grace_period: 2m
+    depends_on:
+      automq-init:
+        condition: service_completed_successfully
+    environment:
+      VVG_TOPIC: ${VVG_TOPIC}
+      GATEWAY_TOPIC: ${GATEWAY_TOPIC}
+      KAFKA_HEAP_OPTS: >-
+        -Xms1024m -Xmx1024m -XX:MetaspaceSize=96m
+        -XX:MaxDirectMemorySize=1536m
+      KAFKA_JVM_PERFORMANCE_OPTS: >-
+        -server -XX:+UseZGC -XX:ZCollectionInterval=5
+    command: ["bash", "/opt/automq-deploy/start-automq.sh"]
+    ports:
+      - "${AUTOMQ_HOST_IP}:${AUTOMQ_EXTERNAL_PORT}:9092"
+      - "127.0.0.1:8890:8890"
+    volumes:
+      - ./runtime:/etc/automq:ro
+      - ./scripts:/opt/automq-deploy:ro
+      - ./state/kraft:/var/lib/automq
+      - ./state/logs:/opt/automq/kafka/logs
+      - ./secrets:/run/secrets:ro
+    networks:
+      - automq
+    cpus: 3.0
+    mem_limit: 6g
+    mem_reservation: 4g
+    memswap_limit: 6g
+    pids_limit: 2048
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /opt/automq-deploy/healthcheck-kafka.sh
+      interval: 10s
+      timeout: 35s
+      retries: 18
+      start_period: 5m
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  automq-bootstrap:
+    image: ${AUTOMQ_IMAGE}
+    pull_policy: never
+    read_only: true
+    depends_on:
+      automq:
+        condition: service_healthy
+    environment:
+      VVG_TOPIC: ${VVG_TOPIC}
+      GATEWAY_TOPIC: ${GATEWAY_TOPIC}
+    command: ["bash", "/opt/automq-deploy/bootstrap-cluster.sh"]
+    volumes:
+      - ./runtime:/etc/automq:ro
+      - ./scripts:/opt/automq-deploy:ro
+      - ./secrets:/run/secrets:ro
+    networks:
+      - automq
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  vector-vvg-shadow:
+    <<: *vector-common
+    profiles: ["shadow"]
+    scale: 3
+    depends_on:
+      automq-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      AUTOMQ_BOOTSTRAP_SERVERS: automq:19092
+      AUTOMQ_TOPIC: ${VVG_TOPIC}
+      AUTOMQ_CONSUMER_GROUP: ${VVG_CONSUMER_GROUP}
+      VICTORIALOGS_URL: ${VICTORIALOGS_URL}
+      VICTORIALOGS_TENANT_ID: ${VVG_TENANT_ID}
+      VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION: "true"
+    command: ["--config", "/etc/vector/vector.yaml"]
+    volumes:
+      - ./config/vector-vvg-consumer.yaml:/etc/vector/vector.yaml:ro
+      - ./state/vector-vvg-shadow:/var/lib/vector
+      - ./secrets/vvg-consumer:/run/secrets/kafka:ro
+    cpus: 1.0
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    pids_limit: 256
+
+  vector-gateway-shadow:
+    <<: *vector-common
+    profiles: ["shadow"]
+    container_name: automq-vector-gateway-shadow
+    depends_on:
+      automq-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      AUTOMQ_BOOTSTRAP_SERVERS: automq:19092
+      AUTOMQ_TOPIC: ${GATEWAY_TOPIC}
+      AUTOMQ_CONSUMER_GROUP: ${GATEWAY_CONSUMER_GROUP}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE}
+      CLICKHOUSE_TABLE: ${GATEWAY_CLICKHOUSE_TABLE}
+      VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION: "true"
+    command: ["--config", "/etc/vector/vector.yaml"]
+    volumes:
+      - ./config/vector-gateway-consumer.yaml:/etc/vector/vector.yaml:ro
+      - ./state/vector-gateway-shadow:/var/lib/vector
+      - ./secrets/gateway-consumer:/run/secrets/kafka:ro
+      - ./secrets/clickhouse:/run/secrets/clickhouse:ro
+    cpus: 0.5
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 256
+
+  vector-vvg-production:
+    <<: *vector-common
+    profiles: ["production"]
+    scale: 3
+    depends_on:
+      automq-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      AUTOMQ_BOOTSTRAP_SERVERS: automq:19092
+      AUTOMQ_TOPIC: ${VVG_TOPIC}
+      AUTOMQ_CONSUMER_GROUP: vvg-victorialogs-production-v1
+      VICTORIALOGS_URL: ${VICTORIALOGS_URL}
+      VICTORIALOGS_TENANT_ID: 0:0
+      VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION: "true"
+    command: ["--config", "/etc/vector/vector.yaml"]
+    volumes:
+      - ./config/vector-vvg-consumer.yaml:/etc/vector/vector.yaml:ro
+      - ./state/vector-vvg-production:/var/lib/vector
+      - ./secrets/vvg-consumer:/run/secrets/kafka:ro
+    cpus: 1.0
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    pids_limit: 256
+
+  vector-gateway-production:
+    <<: *vector-common
+    profiles: ["production"]
+    container_name: automq-vector-gateway-production
+    depends_on:
+      automq-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      AUTOMQ_BOOTSTRAP_SERVERS: automq:19092
+      AUTOMQ_TOPIC: ${GATEWAY_TOPIC}
+      AUTOMQ_CONSUMER_GROUP: gateway-clickhouse-production-v1
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE}
+      CLICKHOUSE_TABLE: nginx_access
+      VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION: "true"
+    command: ["--config", "/etc/vector/vector.yaml"]
+    volumes:
+      - ./config/vector-gateway-consumer.yaml:/etc/vector/vector.yaml:ro
+      - ./state/vector-gateway-production:/var/lib/vector
+      - ./secrets/gateway-consumer:/run/secrets/kafka:ro
+      - ./secrets/clickhouse:/run/secrets/clickhouse:ro
+    cpus: 0.5
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 256
+
+  vmagent:
+    image: ${VMAGENT_IMAGE}
+    pull_policy: never
+    container_name: automq-vmagent
+    restart: always
+    depends_on:
+      automq:
+        condition: service_healthy
+    command:
+      - -promscrape.config=/etc/vmagent/prometheus.yml
+      - -remoteWrite.url=${VICTORIAMETRICS_REMOTE_WRITE_URL}
+      - -remoteWrite.basicAuth.usernameFile=/run/secrets/victoriametrics/username
+      - -remoteWrite.basicAuth.passwordFile=/run/secrets/victoriametrics/password
+      - -remoteWrite.tmpDataPath=/var/lib/vmagent
+      - -remoteWrite.maxDiskUsagePerURL=1073741824
+      - -httpListenAddr=:8429
+    volumes:
+      - ./runtime/prometheus.yml:/etc/vmagent/prometheus.yml:ro
+      - ./state/vmagent:/var/lib/vmagent
+      - ./secrets/victoriametrics:/run/secrets/victoriametrics:ro
+    networks:
+      - automq
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    cpus: 0.25
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+networks:
+  automq:
+    name: automq
+    driver: bridge

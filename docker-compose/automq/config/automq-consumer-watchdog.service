@@ -1,0 +1,8 @@
+[Unit]
+Description=AutoMQ Vector consumer group watchdog
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/data/automq/scripts/consumer-watchdog.sh

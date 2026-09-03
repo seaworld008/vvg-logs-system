@@ -16,5 +16,12 @@ docker-compose/mcp-victorialogs/vmauth/auth.yml
 docker-compose/mcp-victorialogs/secrets/
 **/client-bearer-token
 
+# AutoMQ host-only runtime and credentials
+docker-compose/automq/runtime/
+docker-compose/automq/secrets/
+docker-compose/automq/state/
+docker-compose/automq/backups/
+docker-compose/automq/.env
+
 # Local PR drafting artifact
 PR_BODY.md

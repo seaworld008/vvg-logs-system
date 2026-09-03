@@ -1,0 +1,35 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: automq
+    static_configs:
+      - targets: ["automq:8890"]
+
+  - job_name: automq-vector-consumers
+    static_configs:
+      - targets:
+          - vector-vvg-shadow:9598
+          - vector-gateway-shadow:9599
+          - vector-vvg-production:9598
+          - vector-gateway-production:9599
+
+  - job_name: automq-vector-producers
+    static_configs:
+      - targets:
+          - __CCE_NODE_1__:9598
+          - __CCE_NODE_2__:9598
+        labels:
+          pipeline: vvg
+      - targets:
+          - __CCE_NODE_1__:9599
+          - __CCE_NODE_2__:9599
+        labels:
+          pipeline: gateway
+
+  - job_name: automq-host
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+        labels:
+          automq_host: "true"

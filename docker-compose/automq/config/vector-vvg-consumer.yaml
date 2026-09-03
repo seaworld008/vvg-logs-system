@@ -1,0 +1,103 @@
+data_dir: /var/lib/vector
+
+secret:
+  kafka_auth:
+    type: directory
+    path: /run/secrets/kafka
+
+sources:
+  kafka_vvg:
+    type: kafka
+    bootstrap_servers: "${AUTOMQ_BOOTSTRAP_SERVERS}"
+    group_id: "${AUTOMQ_CONSUMER_GROUP}"
+    topics: ["${AUTOMQ_TOPIC}"]
+    auto_offset_reset: latest
+    commit_interval_ms: 1000
+    fetch_wait_max_ms: 100
+    session_timeout_ms: 120000
+    drain_timeout_ms: 30000
+    socket_timeout_ms: 60000
+    key_field: _automq_message_key
+    offset_key: _automq_offset
+    partition_key: _automq_partition
+    topic_key: _automq_topic
+    headers_key: _automq_headers
+    decoding:
+      codec: json
+    sasl:
+      enabled: true
+      mechanism: SCRAM-SHA-512
+      username: vvg-consumer
+      password: SECRET[kafka_auth.password]
+    metrics:
+      topic_lag_metric: true
+    librdkafka_options:
+      fetch.message.max.bytes: "5242880"
+      fetch.max.bytes: "6291456"
+      receive.message.max.bytes: "16777216"
+      queued.max.messages.kbytes: "4096"
+      fetch.queue.backoff.ms: "100"
+      metadata.max.age.ms: "60000"
+      metadata.recovery.strategy: rebootstrap
+      metadata.recovery.rebootstrap.trigger.ms: "30000"
+      topic.metadata.refresh.interval.ms: "30000"
+      topic.metadata.refresh.fast.interval.ms: "250"
+      topic.metadata.refresh.sparse: "false"
+      reconnect.backoff.ms: "250"
+      reconnect.backoff.max.ms: "5000"
+      socket.keepalive.enable: "true"
+
+  internal_metrics:
+    type: internal_metrics
+
+transforms:
+  restore_vvg_event:
+    type: remap
+    inputs: [kafka_vvg]
+    source: |
+      event_timestamp = string!(._automq_event_timestamp)
+      .timestamp = parse_timestamp!(event_timestamp, "%+")
+      del(._automq_event_timestamp)
+      del(._automq_partition_key)
+      del(._automq_message_key)
+      del(._automq_offset)
+      del(._automq_partition)
+      del(._automq_topic)
+      del(._automq_headers)
+      del(.source_type)
+
+sinks:
+  victorialogs:
+    type: loki
+    inputs: [restore_vvg_event]
+    endpoint: "${VICTORIALOGS_URL}"
+    path: /insert/loki/api/v1/push
+    tenant_id: "${VICTORIALOGS_TENANT_ID}"
+    out_of_order_action: accept
+    labels:
+      job: java-app
+      namespace: "{{ kubernetes.pod_namespace }}"
+      pod: "{{ kubernetes.pod_name }}"
+      container: "{{ kubernetes.container_name }}"
+      level: "{{ level }}"
+    encoding:
+      codec: json
+    batch:
+      max_bytes: 524288
+      max_events: 500
+      timeout_secs: 1
+    buffer:
+      type: memory
+      max_events: 500
+      when_full: block
+    compression: none
+    healthcheck: false
+    acknowledgements:
+      enabled: true
+    request:
+      timeout_secs: 60
+
+  metrics:
+    type: prometheus_exporter
+    inputs: [internal_metrics]
+    address: 0.0.0.0:9598

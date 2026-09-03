@@ -16,6 +16,23 @@ fail() {
   failures=$((failures + 1))
 }
 
+git_ls_files() {
+  local git_dir
+
+  if git ls-files 2>/dev/null; then
+    return 0
+  fi
+  if [[ -f .git ]] && command -v wslpath >/dev/null 2>&1; then
+    git_dir="$(sed -n 's/^gitdir: //p' .git)"
+    if [[ "${git_dir}" =~ ^[A-Za-z]:/ ]]; then
+      GIT_DIR="$(wslpath -u "${git_dir}")" \
+        GIT_WORK_TREE="${repo_root}" git ls-files
+      return
+    fi
+  fi
+  return 1
+}
+
 validate_json_file() {
   local path="$1"
   local description="$2"
@@ -120,7 +137,7 @@ validate_static() {
   fi
   require_literal "README.md" 'docker-compose/mcp-victorialogs/README.md' \
     "README links the VictoriaLogs MCP deployment guide"
-  tracked_sensitive="$(git ls-files | grep -E '(^|/)(\.env|服务器信息\.txt)$' || true)"
+  tracked_sensitive="$(git_ls_files | grep -E '(^|/)(\.env|服务器信息\.txt)$' || true)"
   if [[ -n "${tracked_sensitive}" ]]; then
     printf '%s\n' "${tracked_sensitive}" >&2
     fail "Local deployment credentials must not be tracked"
@@ -328,6 +345,12 @@ validate_static() {
   else
     fail "Gateway ClickHouse static configuration validates"
   fi
+
+  if bash scripts/validate-automq.sh --static; then
+    pass "AutoMQ static configuration validates"
+  else
+    fail "AutoMQ static configuration validates"
+  fi
 }
 
 extract_vector_config() {
@@ -443,6 +466,9 @@ validate_runtime() {
 
   bash scripts/validate-clickhouse-gateway.sh --runtime
   pass "Gateway ClickHouse runtime configuration validates"
+
+  bash scripts/validate-automq.sh --runtime
+  pass "AutoMQ runtime configuration validates"
 }
 
 case "${mode}" in

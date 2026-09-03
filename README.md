@@ -16,6 +16,24 @@ MCP Client -> mcp-victorialogs -> vmauth -> VictoriaLogs
 
 仓库后半部分另提供独立的 [Gateway 结构化日志分析附加方案](#附加方案gateway-结构化日志分析)。该方案使用 ClickHouse，不与 VVG 的 VictoriaLogs 原始日志链路混合部署或混合变更。
 
+## 日志链路选型
+
+仓库同时长期保留两种生产方案，不因引入 AutoMQ 删除直写配置：
+
+| 场景 | 推荐链路 | 取舍 |
+|---|---|---|
+| 小到中等规模、下游稳定、优先降低运维复杂度 | Vector 直写 VictoriaLogs 或 ClickHouse | 组件少、延迟低；下游故障时主要依赖节点 disk buffer |
+| 中大规模、高峰明显、需要 72 小时集中缓冲或隔离存储抖动 | Vector -> AutoMQ + S3 -> Vector consumer -> VictoriaLogs/ClickHouse | 可独立追赶和重放；增加 Broker、对象存储、consumer group 与监控运维 |
+
+VVG 直写基线位于 `k8s-deployment/vector-k8s-containerd-cri.yaml`，Gateway 直写基线位于
+`clickhouse-gateway/vector/vector-k8s-containerd.yaml`。它们既是较小规模环境的推荐配置，
+也是 AutoMQ 主链路的第一回滚入口，必须与缓冲层方案一起维护和验证。
+
+![AutoMQ 原生夜莺大屏脱敏预览](docs/images/automq-dashboard-overview.png)
+
+上图使用示例值展示 AutoMQ 原生夜莺大屏结构；不包含生产地址、账号、消费组、桶名或
+运行数据。大屏和告警属于金龄云 SaaS 日志系统，生产导入时放入对应业务组。
+
 ## 快速入口
 
 - [快速开始](#快速开始)
@@ -24,6 +42,7 @@ MCP Client -> mcp-victorialogs -> vmauth -> VictoriaLogs
 - [Vector/VictoriaLogs 延迟排查运行手册](docs/vector-victorialogs-latency-runbook.md)
 - [AI Agent 配置、升级与验收指南](docs/ai-agent-operations-guide.md)
 - [VictoriaLogs MCP 部署说明](docker-compose/mcp-victorialogs/README.md)
+- [AutoMQ + 对象存储日志缓冲层](docker-compose/automq/README.md)
 
 ## VVG 核心架构
 
@@ -233,6 +252,7 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 │   │   ├── env.example
 │   │   └── README.md
 │   ├── mcp-victorialogs/           # 官方 MCP + vmauth 查询保护
+│   ├── automq/                      # AutoMQ + OBS 持久缓冲、消费者与监控
 │   └── vector/                     # Docker Vector
 ├── k8s-deployment/                 # Docker CRI / Containerd CRI Vector
 ├── clickhouse-gateway/             # 附加方案：Gateway -> Vector -> ClickHouse -> Grafana
@@ -318,6 +338,8 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 - [VictoriaLogs 部署说明](docker-compose/victorialogs/README.md)
 - [Grafana 部署说明](docker-compose/grafana/README.md)
 - [VictoriaLogs MCP 部署说明](docker-compose/mcp-victorialogs/README.md)
+- [AutoMQ + OBS 日志缓冲层运行手册](docs/automq-log-buffer-runbook.md)
+- [架构决策 ADR-002：AutoMQ 对象存储日志缓冲层](docs/decisions/0002-automq-object-storage-log-buffer.md)
 - [Vector 部署说明](docker-compose/vector/README.md)
 - [Kubernetes 部署说明](k8s-deployment/README.md)
 

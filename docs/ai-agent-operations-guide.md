@@ -21,6 +21,7 @@
 | --- | --- |
 | Gateway 日志写入 ClickHouse | `clickhouse-gateway/README.md`、`docs/vector-clickhouse-gateway-runbook.md` |
 | KubeDoor Gateway Dashboard / GeoIP | `scripts/sanitize-clickhouse-gateway-dashboard.mjs`、`clickhouse-gateway/vector/geoip/NOTICE.md` |
+| VVG/Gateway 持久缓冲 | `docker-compose/automq/README.md`、`docs/automq-log-buffer-runbook.md` |
 
 ## 2. 先判断任务边界
 

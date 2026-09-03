@@ -1,0 +1,103 @@
+groups:
+  - name: automq-critical
+    rules:
+      - alert: AutoMQBrokerDown
+        expr: up{job="automq"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: AutoMQ broker is unavailable
+          description: The single AutoMQ broker has been unreachable for one minute.
+
+      - alert: AutoMQActiveControllerInvalid
+        expr: sum(kafka_controller_active_count) by (job) != 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: AutoMQ active controller count is not one
+          description: The single-node KRaft controller is unavailable or inconsistent.
+
+      - alert: AutoMQS3RequestErrors
+        expr: sum(rate(kafka_stream_operation_latency_count{operation_type="S3Request",status="failed"}[1m])) by (operation_name) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: AutoMQ object storage requests are failing
+          description: OBS operation {{ $labels.operation_name }} is returning failures.
+
+      - alert: AutoMQKafkaRequestErrors
+        expr: sum(rate(kafka_request_error_count_total{error!="NONE"}[1m])) by (type,error) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: AutoMQ Kafka requests are failing
+          description: Request {{ $labels.type }} is returning {{ $labels.error }}.
+
+      - alert: AutoMQVectorDeliveryErrors
+        expr: sum(increase(vector_component_errors_total{component_type=~"kafka|loki|clickhouse"}[5m])) by (component_id,error_type) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Vector delivery errors detected
+          description: Component {{ $labels.component_id }} has new {{ $labels.error_type }} errors.
+
+  - name: automq-capacity
+    rules:
+      - alert: AutoMQProduceLatencyHigh
+        expr: kafka_request_time_99p_milliseconds{type="Produce"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: AutoMQ produce P99 latency exceeds one second
+          description: Produce P99 is {{ printf "%.0f" $value }} ms.
+
+      - alert: AutoMQVVGConsumerLagHigh
+        expr: sum(clamp_min(vector_kafka_consumer_lag{topic_id="vvg.logs.v1",partition_id!="-1"}, 0)) > 100000
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: VVG AutoMQ consumer lag is high
+          description: VVG consumer lag is {{ printf "%.0f" $value }} records.
+
+      - alert: AutoMQGatewayConsumerLagHigh
+        expr: sum(clamp_min(vector_kafka_consumer_lag{topic_id="gateway.access.v1",partition_id!="-1"}, 0)) > 2000
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Gateway AutoMQ consumer lag is high
+          description: Gateway consumer lag is {{ printf "%.0f" $value }} records.
+
+      - alert: AutoMQProducerQueueGrowing
+        expr: sum(vector_buffer_size_bytes{component_type="kafka",component_id=~"automq(_lane_[ab])?"}) by (component_id) > 268435456
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Vector Kafka producer queue exceeds 256 MiB
+          description: Component {{ $labels.component_id }} has {{ printf "%.0f" $value }} queued bytes.
+
+      - alert: AutoMQHostMemoryLow
+        expr: node_memory_MemAvailable_bytes{automq_host="true"} < 3221225472
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: AutoMQ shared host has less than 3 GiB available memory
+          description: Available memory is {{ printf "%.0f" $value }} bytes.
+
+      - alert: AutoMQHostCPUHigh
+        expr: 100 - avg by (instance) (rate(node_cpu_seconds_total{automq_host="true",mode="idle"}[5m]) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: AutoMQ shared host CPU exceeds 80 percent
+          description: Sustained host CPU is {{ printf "%.1f" $value }} percent.

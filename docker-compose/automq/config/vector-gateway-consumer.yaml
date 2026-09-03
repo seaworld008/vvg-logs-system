@@ -1,0 +1,107 @@
+data_dir: /var/lib/vector
+
+secret:
+  kafka_auth:
+    type: directory
+    path: /run/secrets/kafka
+  clickhouse_auth:
+    type: directory
+    path: /run/secrets/clickhouse
+
+sources:
+  kafka_gateway:
+    type: kafka
+    bootstrap_servers: "${AUTOMQ_BOOTSTRAP_SERVERS}"
+    group_id: "${AUTOMQ_CONSUMER_GROUP}"
+    topics: ["${AUTOMQ_TOPIC}"]
+    auto_offset_reset: latest
+    commit_interval_ms: 1000
+    fetch_wait_max_ms: 100
+    session_timeout_ms: 120000
+    drain_timeout_ms: 30000
+    socket_timeout_ms: 60000
+    key_field: _automq_message_key
+    offset_key: _automq_offset
+    partition_key: _automq_partition
+    topic_key: _automq_topic
+    headers_key: _automq_headers
+    decoding:
+      codec: json
+    sasl:
+      enabled: true
+      mechanism: SCRAM-SHA-512
+      username: gateway-consumer
+      password: SECRET[kafka_auth.password]
+    metrics:
+      topic_lag_metric: true
+    librdkafka_options:
+      fetch.message.max.bytes: "5242880"
+      fetch.max.bytes: "6291456"
+      receive.message.max.bytes: "16777216"
+      queued.max.messages.kbytes: "4096"
+      fetch.queue.backoff.ms: "100"
+      metadata.max.age.ms: "60000"
+      metadata.recovery.strategy: rebootstrap
+      metadata.recovery.rebootstrap.trigger.ms: "30000"
+      topic.metadata.refresh.interval.ms: "30000"
+      topic.metadata.refresh.fast.interval.ms: "250"
+      topic.metadata.refresh.sparse: "false"
+      reconnect.backoff.ms: "250"
+      reconnect.backoff.max.ms: "5000"
+      socket.keepalive.enable: "true"
+
+  internal_metrics:
+    type: internal_metrics
+
+transforms:
+  restore_gateway_event:
+    type: remap
+    inputs: [kafka_gateway]
+    source: |
+      .timestamp = string!(._automq_event_timestamp)
+      del(._automq_event_timestamp)
+      del(._automq_partition_key)
+      del(._automq_message_key)
+      del(._automq_offset)
+      del(._automq_partition)
+      del(._automq_topic)
+      del(._automq_headers)
+      del(.source_type)
+
+sinks:
+  clickhouse:
+    type: clickhouse
+    inputs: [restore_gateway_event]
+    endpoint: "${CLICKHOUSE_URL}"
+    database: "${CLICKHOUSE_DATABASE}"
+    table: "${CLICKHOUSE_TABLE}"
+    format: json_each_row
+    auth:
+      strategy: basic
+      user: SECRET[clickhouse_auth.username]
+      password: SECRET[clickhouse_auth.password]
+    compression: gzip
+    acknowledgements:
+      enabled: true
+    batch:
+      max_bytes: 2097152
+      max_events: 2000
+      timeout_secs: 1
+    buffer:
+      type: memory
+      max_events: 5000
+      when_full: block
+    query_settings:
+      async_insert_settings:
+        enabled: true
+        wait_for_processing: true
+        wait_for_processing_timeout: 120
+    request:
+      timeout_secs: 180
+      retry_initial_backoff_secs: 1
+      retry_max_duration_secs: 30
+
+  metrics:
+    type: prometheus_exporter
+    inputs: [internal_metrics]
+    address: 0.0.0.0:9599
