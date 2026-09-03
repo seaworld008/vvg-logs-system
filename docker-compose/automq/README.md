@@ -102,7 +102,10 @@ ConfigMap 和 hostPath；production 保留原资源名、checkpoint 与 hostPath
 producer 同时保留官方 `rebootstrap`/完整 metadata 刷新和有条件 liveness：Broker
 不可达时只使用 hostPath disk buffer；Broker 已恢复但发送连续 90 秒停滞时重启 Pod，
 并从同一 ledger 继续排空。consumer group 的长故障恢复由宿主机 systemd watchdog
-兜底，不能把仅能连接 Kafka 端口当作恢复完成。
+兜底，不能把仅能连接 Kafka 端口当作恢复完成。VVG 的 `kubernetes_logs` source 官方
+语义仍是 best effort 且不支持 source acknowledgement；本方案的至少一次保证从事件
+可靠进入 producer disk buffer 后开始，不能把它扩大为容器日志文件到存储端的绝对
+端到端保证。
 
 CCE 管理节点上的正式源、新清单和备份必须按链路归档，不能只留在临时目录：
 

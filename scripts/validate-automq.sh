@@ -274,6 +274,12 @@ PY
   fi
   require_literal "${root}/README.md" '不得放入' \
     "AutoMQ monitoring is owned by the Jinling Cloud SaaS project"
+  require_literal "docs/automq-log-buffer-runbook.md" \
+    'delivery: best effort' \
+    "VVG documentation records the Kubernetes source delivery boundary"
+  require_literal "${root}/README.md" \
+    '不能把它扩大为' \
+    "AutoMQ README does not overstate end-to-end delivery guarantees"
   forbid_regex "${gateway}" 'requestHeaders|responseHeaders|requestBody|responseBody' \
     "Gateway consumer cannot persist raw headers or bodies"
   require_literal "scripts/requirements-automq.txt" 'PyYAML==6.0.3' \

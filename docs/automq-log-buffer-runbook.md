@@ -140,6 +140,14 @@ Controller、S3 request error、Kafka request error、consumer lag、producer qu
   `metadata.max.age.ms=60s` 和 Vector 自带 librdkafka 的默认 Zstd level。保留
   `acks=all + idempotence`，不启用
   实验性的 gapless guarantee。
+- VVG 的 Vector `kubernetes_logs` source 在官方能力表中是 `delivery: best effort`、
+  `acknowledgements: no`。因此不能把整条链路表述为“从容器日志文件开始严格
+  at-least-once”：节点或 Vector 在 source checkpoint 已推进、事件尚未可靠进入 disk
+  buffer 的极小故障窗口仍可能丢失。Kafka sink 的 `acks=all + idempotence`、持久
+  disk buffer，以及 AutoMQ consumer 到 VictoriaLogs 的 acknowledgement/replay 仍然
+  保护 source 边界之后的链路。必须监控 source checkpoint、producer buffer 和
+  discarded/error counter，并在容量或合规要求不接受该窗口时改用支持端到端 ack 的
+ 采集协议/source。参考 [Vector Kubernetes logs source](https://vector.dev/docs/reference/configuration/sources/kubernetes_logs/)。
 - VVG producer 使用两个按 partition key 确定性分流的 5 GiB Kafka lane，提高积压
   追赶并保持总上限 10 GiB。每 lane 使用 Zstd、最多 500 events 的批次。
 - Kafka consumer 不能叠加 Vector disk v2 buffer。Kafka offset 已提供持久重放，
