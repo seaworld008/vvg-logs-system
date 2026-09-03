@@ -4,16 +4,23 @@
 
 ## 1. 快速定位
 
+### VVG 主系统
+
 | 任务 | 首要文件 |
 | --- | --- |
 | Grafana 与外置插件 | `docker-compose/grafana/README.md`、`scripts/install-grafana-plugins.sh` |
 | 日志检索 Dashboard | `scripts/render-vvg-message-filter.mjs`、`docker-compose/grafana/dashboards/vvg-log-search.json` |
 | 查询慢或页面转圈 | `docs/grafana-victorialogs-query-performance-runbook.md` |
 | Vector 延迟或丢日志 | `docs/vector-victorialogs-latency-runbook.md` |
-| Gateway 日志写入 ClickHouse | `clickhouse-gateway/README.md`、`docs/vector-clickhouse-gateway-runbook.md` |
-| KubeDoor Gateway Dashboard / GeoIP | `scripts/sanitize-clickhouse-gateway-dashboard.mjs`、`clickhouse-gateway/vector/geoip/NOTICE.md` |
 | 字段、导入、回滚 | `docs/grafana-victorialogs-log-search-dashboard-guide.md` |
 | 全仓库约束 | `AGENTS.md`、`scripts/validate-configs.sh` |
+
+### 附加 Gateway 方案
+
+| 任务 | 首要文件 |
+| --- | --- |
+| Gateway 日志写入 ClickHouse | `clickhouse-gateway/README.md`、`docs/vector-clickhouse-gateway-runbook.md` |
+| KubeDoor Gateway Dashboard / GeoIP | `scripts/sanitize-clickhouse-gateway-dashboard.mjs`、`clickhouse-gateway/vector/geoip/NOTICE.md` |
 
 ## 2. 先判断任务边界
 
