@@ -272,6 +272,8 @@ PY
   else
     fail "Nightingale dashboard structure is invalid"
   fi
+  require_literal "${root}/README.md" '不得放入' \
+    "AutoMQ monitoring is owned by the Jinling Cloud SaaS project"
   forbid_regex "${gateway}" 'requestHeaders|responseHeaders|requestBody|responseBody' \
     "Gateway consumer cannot persist raw headers or bodies"
   require_literal "scripts/requirements-automq.txt" 'PyYAML==6.0.3' \

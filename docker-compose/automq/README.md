@@ -128,5 +128,6 @@ bash scripts/validate-automq.sh --runtime
 
 生产验收和回滚见运行手册。OBS 桶不得设置会早于 Kafka retention 删除对象的生命周期
 规则；只允许应用 `config/obs-lifecycle.json`，清理七天前仍未完成的 multipart upload。
-Grafana/Nightingale 大屏与告警必须导入日志系统所属业务组，并在启用前用真实
-VictoriaMetrics 数据源逐条验证表达式。
+Grafana/Nightingale 大屏与告警属于金龄云 SaaS 日志系统，必须导入对应的金龄云
+SaaS 业务组，并在启用前用真实 VictoriaMetrics 数据源逐条验证表达式；不得放入
+通用基础设施或其他项目的业务组。

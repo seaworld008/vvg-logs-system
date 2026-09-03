@@ -107,7 +107,8 @@ AutoMQ Prometheus监听容器内 `8890`，宿主机仅绑定 loopback。两个 c
 本机 node-exporter，remote write到现有 VictoriaMetrics。
 
 导入 `monitoring/grafana/automq-cluster.json` 到现有监控 Grafana，datasource变量绑定
-现有 VictoriaMetrics；将 `monitoring/alert-rules.yml` 导入夜莺。至少验证 Broker down、
+现有 VictoriaMetrics；将原生夜莺大屏和 `monitoring/alert-rules.yml` 一起导入金龄云
+SaaS 业务组，不得放入通用基础设施或其他项目业务组。至少验证 Broker down、
 Controller、S3 request error、Kafka request error、consumer lag、producer queue、
 可用内存和 CPU告警均可产生并恢复。
 
