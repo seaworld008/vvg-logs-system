@@ -19,7 +19,7 @@
 - 外置插件目录必须位于 `/var/lib/grafana` 数据挂载之外；同时设置 `GF_PLUGINS_PREINSTALL_DISABLED=true` 和 `GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false`。
 - 密码、Token、服务器清单、真实内网地址和运行数据不得进入 Git、PR、Release 或截图。
 - Dashboard UID `vvg-log-search`、VictoriaLogs datasource UID `victorialogs-ds`、默认 15 分钟、日志明细 500 行和 Query/Multi 变量 `allValue: "*"` 不得无证据修改。
-- 日志趋势必须复用 Explore `Logs volume` 的 `hits` / `logsVolume` 查询、按 `level` 分组并固定 `maxDataPoints: 100`；禁止退回会产生亚像素稀疏柱的 `statsRange`。
+- 日志趋势必须复用 Explore `Logs volume` 的 `hits` / `logsVolume` 查询、按 `level` 分组，并固定 `maxDataPoints: 100` 和 `barWidthFactor: 0.6`；禁止退回会产生亚像素稀疏柱的 `statsRange`。
 - 测试和生产使用同一查询逻辑、面板代码、颜色和限制；只允许标题、集群显示名、环境标签和默认 namespace 不同。
 - 只改获批服务。Grafana 变更不得顺带升级 VictoriaLogs、Vector 或业务服务。
 - ClickHouse 网关链路固定 Dashboard UID `vvg-clickhouse-gateway` 和 datasource UID `gateway-clickhouse`；默认最近 15 分钟、自动刷新关闭、明细 500 行。

@@ -184,6 +184,8 @@ validate_static() {
     "Grafana log trend declares the Logs volume supporting query"
   require_literal "${grafana_dashboard}" '"maxDataPoints": 100' \
     "Grafana log trend keeps approximately 100 readable buckets"
+  require_literal "${grafana_dashboard}" '"barWidthFactor": 0.6' \
+    "Grafana log trend keeps balanced spacing between buckets"
   forbid_regex "${grafana_dashboard}" '"queryType": "statsRange"' \
     "Grafana log trend avoids sparse subpixel statsRange bars"
   require_literal "${grafana_dashboard}" '"value": "*"' \
