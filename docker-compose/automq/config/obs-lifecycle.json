@@ -1,0 +1,12 @@
+{
+  "Rules": [
+    {
+      "ID": "abort-incomplete-multipart-7d",
+      "Prefix": "",
+      "Status": "Enabled",
+      "AbortIncompleteMultipartUpload": {
+        "DaysAfterInitiation": 7
+      }
+    }
+  ]
+}

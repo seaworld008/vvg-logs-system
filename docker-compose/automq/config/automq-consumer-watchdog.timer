@@ -1,0 +1,11 @@
+[Unit]
+Description=Check AutoMQ Vector consumer groups every 30 seconds
+
+[Timer]
+OnActiveSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

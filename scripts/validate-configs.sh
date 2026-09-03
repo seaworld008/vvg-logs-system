@@ -328,6 +328,12 @@ validate_static() {
   else
     fail "Gateway ClickHouse static configuration validates"
   fi
+
+  if bash scripts/validate-automq.sh --static; then
+    pass "AutoMQ static configuration validates"
+  else
+    fail "AutoMQ static configuration validates"
+  fi
 }
 
 extract_vector_config() {
@@ -443,6 +449,9 @@ validate_runtime() {
 
   bash scripts/validate-clickhouse-gateway.sh --runtime
   pass "Gateway ClickHouse runtime configuration validates"
+
+  bash scripts/validate-automq.sh --runtime
+  pass "AutoMQ runtime configuration validates"
 }
 
 case "${mode}" in

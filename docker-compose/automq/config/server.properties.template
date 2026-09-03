@@ -1,0 +1,46 @@
+process.roles=broker,controller
+node.id=0
+controller.quorum.voters=0@automq:19093
+controller.quorum.bootstrap.servers=automq:19093
+listeners=EXTERNAL://0.0.0.0:9092,INTERNAL://0.0.0.0:19092,CONTROLLER://0.0.0.0:19093
+advertised.listeners=EXTERNAL://__AUTOMQ_HOST_IP__:__AUTOMQ_EXTERNAL_PORT__,INTERNAL://automq:19092
+listener.security.protocol.map=CONTROLLER:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT,INTERNAL:SASL_PLAINTEXT
+inter.broker.listener.name=INTERNAL
+controller.listener.names=CONTROLLER
+sasl.enabled.mechanisms=SCRAM-SHA-512,PLAIN
+sasl.mechanism.inter.broker.protocol=SCRAM-SHA-512
+sasl.mechanism.controller.protocol=PLAIN
+listener.name.controller.sasl.enabled.mechanisms=PLAIN
+listener.name.controller.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="automq_controller" password="__AUTOMQ_ADMIN_PASSWORD__" user_automq_controller="__AUTOMQ_ADMIN_PASSWORD__";
+listener.name.external.sasl.enabled.mechanisms=SCRAM-SHA-512
+listener.name.external.scram-sha-512.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required;
+listener.name.internal.sasl.enabled.mechanisms=SCRAM-SHA-512
+listener.name.internal.scram-sha-512.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="automq-admin" password="__AUTOMQ_ADMIN_PASSWORD__";
+authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
+super.users=User:automq-admin;User:automq_controller
+allow.everyone.if.no.acl.found=false
+auto.create.topics.enable=false
+delete.topic.enable=true
+log.dirs=/var/lib/automq
+num.partitions=1
+offsets.topic.replication.factor=1
+transaction.state.log.replication.factor=1
+transaction.state.log.min.isr=1
+group.initial.rebalance.delay.ms=0
+message.max.bytes=5242880
+replica.fetch.max.bytes=6291456
+elasticstream.enable=true
+s3.data.buckets=0@s3://__AUTOMQ_OBS_BUCKET__?region=__AUTOMQ_OBS_REGION__&endpoint=__AUTOMQ_OBS_ENDPOINT__
+s3.ops.buckets=1@s3://__AUTOMQ_OBS_BUCKET__?region=__AUTOMQ_OBS_REGION__&endpoint=__AUTOMQ_OBS_ENDPOINT__
+s3.wal.path=0@s3://__AUTOMQ_OBS_BUCKET__?region=__AUTOMQ_OBS_REGION__&endpoint=__AUTOMQ_OBS_ENDPOINT__&batchInterval=250&maxBytesInBatch=8388608
+s3.stream.allocator.policy=POOLED_DIRECT
+s3.wal.cache.size=805306368
+s3.block.cache.size=268435456
+s3.wal.upload.threshold=268435456
+s3.telemetry.metrics.exporter.type=prometheus
+s3.metrics.exporter.prom.host=0.0.0.0
+s3.metrics.exporter.prom.port=8890
+autobalancer.client.listener.name=INTERNAL
+autobalancer.client.auth.security.protocol=SASL_PLAINTEXT
+autobalancer.client.auth.sasl.mechanism=SCRAM-SHA-512
+autobalancer.client.auth.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="automq-admin" password="__AUTOMQ_ADMIN_PASSWORD__";

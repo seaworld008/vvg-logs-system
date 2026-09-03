@@ -10,8 +10,9 @@
 4. `docs/grafana-victorialogs-query-performance-runbook.md`
 5. `docs/grafana-victorialogs-log-search-dashboard-guide.md`
 6. ClickHouse 网关链路任务再读 `docs/vector-clickhouse-gateway-runbook.md`
-7. MCP 任务再读 `docker-compose/mcp-victorialogs/README.md`
-8. 即将修改的 Compose、环境变量示例、Dashboard 生成器和校验脚本
+7. AutoMQ 日志缓冲任务再读 `docs/automq-log-buffer-runbook.md`
+8. MCP 任务再读 `docker-compose/mcp-victorialogs/README.md`
+9. 即将修改的 Compose、环境变量示例、Dashboard 生成器和校验脚本
 
 ## 不可破坏的基线
 
@@ -50,6 +51,22 @@
 - Grafana 使用只读 ClickHouse 用户。不得把 `default` 管理账号或 Vector 写入账号复用到 datasource。
 - GeoIP 使用固定 GitHub Release 中的 DB-IP City Lite、精确 SHA-256 和持久目录；禁止使用现场华为云/OBS/CDN 地址或浮动下载链接，Dashboard 必须保留 DB-IP 归属链接。
 - KubeDoor Gateway Dashboard 的仓库 JSON 是默认大屏。导入 Grafana API 导出时运行 `node scripts/sanitize-clickhouse-gateway-dashboard.mjs RAW_EXPORT.json`，再运行校验；不得恢复为旧的 12 面板简化版。
+
+## AutoMQ + 对象存储专区
+
+`docker-compose/automq/` 是 VVG 与 Gateway 的可选 Kafka-compatible 持久缓冲层。
+
+- 生产镜像必须先进入受控 Harbor/SWR并固定 tag 与 digest；正式启动不得在线拉取。
+- 当前单节点、共享宿主机和单 OBS 桶是用户明确接受的受控例外，不得描述为官方生产高可用架构，也不得复制到其他环境作为默认值。
+- AutoMQ 固定 `3 CPU / 6 GiB`，Heap 1.5 GiB、Direct Memory 2.25 GiB、WAL cache 768 MiB、Block cache 256 MiB、upload threshold 256 MiB；不得取消 cgroup 边界或添加 Swap。
+- data/ops/WAL 可复用同一物理桶但必须使用固定 bucket ID `0/1/0`；禁止把 OBS 普通文件夹当作 bucket prefix。桶必须 private、标准存储、SSE-OBS，且不能用生命周期提前删除活跃对象。
+- 对华为云 OBS 不设置 `checksumAlgorithm`；必须完成小对象、multipart、读取校验、删除和 Broker 重启验证。
+- Kafka 外部入口只绑定 VPC 内网地址，VPC 内工作负载可达，不配置源 IP 白名单，也不得发布公网；使用 `SASL_PLAINTEXT + SCRAM-SHA-512`，关闭自动建 Topic，producer/consumer/admin 使用独立用户和 ACL。
+- VVG 与 Gateway 使用独立 Topic、consumer group和 Vector state。producer 使用 `disk + block`，consumer 依靠 Kafka offset并使用有界 `memory + block`。Gateway 原始 header/body禁止进入 AutoMQ；只允许解析和脱敏后的结构化事件。
+- shadow 与 production producer 的 metrics hostPort相同，主切前必须先停止 shadow；shadow 与 production consumer不得同时写同一正式后端。
+- 生产者清单必须由 `scripts/render-automq-vector-manifest.py` 从当前真实源 manifest生成，禁止用仓库公开示例覆盖现场解析、GeoIP或checkpoint。
+- VVG/Gateway 直写配置必须长期保留；小到中等规模优先直写，中大规模且需要集中缓冲时再采用 AutoMQ + 对象存储。
+- 本阶段不得停止或重建 `redis-v9`、`elk_redis`、Logstash、Kibana、Elasticsearch、VictoriaLogs、ClickHouse、Grafana或业务服务。
 
 ## Dashboard 修改
 
