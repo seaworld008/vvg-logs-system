@@ -1,3 +1,5 @@
 *.sh text eol=lf
 Dockerfile text eol=lf
+docker-compose/automq/monitoring/nightingale/automq-cluster.json text eol=lf
 docker-compose/victorialogs/monitoring/grafana/victorialogs-v1.52.0.json binary
+docker-compose/victorialogs/monitoring/nightingale/victorialogs-v1.52.0.json text eol=lf
