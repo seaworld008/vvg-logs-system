@@ -124,6 +124,33 @@ validate_static() {
     "README displays the dashboard overview"
   require_literal "README.md" 'docs/images/vvg-message-filter-builder.png' \
     "README displays the message filter builder"
+  require_literal "README.md" '## 项目背景' \
+    "README explains the project background"
+  require_literal "README.md" '## 为什么选择这套架构' \
+    "README explains the architecture decision"
+  require_literal "README.md" '## 官方组件能力' \
+    "README documents official component capabilities"
+  if [[ "$(grep -Fc '```mermaid' README.md)" -ge 2 ]]; then
+    pass "README includes the core and Gateway Mermaid architecture diagrams"
+  else
+    fail "README must include both Mermaid architecture diagrams"
+  fi
+  require_literal "README.md" 'AUTOMQ[可选 AutoMQ 集群' \
+    "VVG architecture includes the optional AutoMQ cluster"
+  require_literal "README.md" 'MQ --> CONSUMER[Vector consumer' \
+    "Gateway architecture includes the buffered consumer path"
+  require_literal "README.md" 'Gateway 原始 header/body 不会进入 AutoMQ 或对象存储' \
+    "Gateway architecture documents the pre-buffer redaction boundary"
+  require_literal "README.md" 'https://vector.dev/docs/introduction/' \
+    "README links the official Vector introduction"
+  require_literal "README.md" 'https://docs.victoriametrics.com/victorialogs/' \
+    "README links the official VictoriaLogs documentation"
+  require_literal "README.md" 'https://docs.automq.com/automq/what-is-automq/overview' \
+    "README links the official AutoMQ overview"
+  require_literal "README.md" 'https://github.com/ccfos/nightingale' \
+    "README links the official Nightingale repository"
+  require_literal "README.md" '官方公开 benchmark' \
+    "README qualifies upstream performance and cost claims"
   require_literal "README.md" 'docs/ai-agent-operations-guide.md' \
     "README links the AI agent operations guide"
   require_literal "README.md" 'docs/grafana-victorialogs-研发现场日志查询%20&%20过滤手册.md' \
