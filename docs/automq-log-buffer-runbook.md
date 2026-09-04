@@ -85,6 +85,35 @@ shadow 清单必须满足：
 - Gateway shadow 的 checkpoint 与 GeoIP 数据必须分卷；已校验的正式 GeoIP 目录只读
   复用，不能让 shadow init 容器重新联网下载。
 
+### 4.1 VVG consumer 跨主机迁移
+
+只有 VictoriaLogs 目标机同时满足以下条件时，才允许把 VVG consumer 与 VictoriaLogs
+同机放置：可用内存不少于 3 GiB、连续 10 分钟 CPU低于 80%、无 Swap压力、Kafka VPC
+入口和 VictoriaLogs健康接口可达、精确 Vector image ID/digest已在本机验证。旧 ELK、
+Logstash、Redis等服务未获单独批准时不得停止或重建。
+
+使用 `docker-compose/automq/docker-compose.vvg-consumers.yml` 部署三个显式服务。它们
+必须保留原 production Topic/group、1 CPU/1.5 GiB限制、120 秒优雅停止、memory+block、
+acknowledgement和相同 Vector配置；三个 state目录及 metrics端口必须彼此独立。目标机
+`.env`、SCRAM password和备份保持 `0600`，真实地址不得写入仓库。
+
+主切按以下顺序逐实例执行：
+
+1. 启动一个目标机 consumer，确认 group成员增加、metrics可抓取、收到和发出事件、
+   `vector_component_errors_total`无增长；
+2. 在原主机用 `docker stop -t 120` 停止一个 consumer，确认退出码 0且 group恢复为三个
+   成员；
+3. 重复两次，期间持续观察 lag；不允许一次停止全部旧 consumer；
+4. 将 vmagent目标原子切换为三个新 metrics地址，只重建 vmagent，并确认所有正式 target
+   为 up；
+5. 将三个已退出旧容器的 restart policy改为 `no`，避免原宿主机或 Docker daemon重启时
+   自动重新加入 production group；
+6. 观察至少 90 分钟，再归档旧实例配置。验收前保留原容器和 state，不执行删除。
+
+回滚时反向操作：先在原主机启动一个旧 consumer，确认同一 group完成 rebalance后再停
+一个新 consumer，直至三个旧实例恢复。Kafka offset保存在 AutoMQ；不得复制或合并三个
+consumer的本地 state目录。
+
 ## 5. 当天门禁
 
 以下任何步骤失败都停止在当前安全状态，不压缩等待时间：

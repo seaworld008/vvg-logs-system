@@ -1,0 +1,70 @@
+x-vector-common: &vector-common
+  image: ${VECTOR_IMAGE}
+  restart: always
+  stop_grace_period: 2m
+  read_only: true
+  command: ["--config", "/etc/vector/vector.yaml"]
+  environment: &vector-environment
+    AUTOMQ_BOOTSTRAP_SERVERS: ${AUTOMQ_BOOTSTRAP_SERVERS}
+    AUTOMQ_TOPIC: ${VVG_TOPIC}
+    AUTOMQ_CONSUMER_GROUP: ${VVG_CONSUMER_GROUP}
+    VICTORIALOGS_URL: ${VICTORIALOGS_URL}
+    VICTORIALOGS_TENANT_ID: ${VICTORIALOGS_TENANT_ID}
+    VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION: "true"
+  volumes:
+    - ./config/vector-vvg-consumer.yaml:/etc/vector/vector.yaml:ro
+    - ./secrets/vvg-consumer:/run/secrets/kafka:ro
+  cpus: 1.0
+  mem_limit: 1536m
+  memswap_limit: 1536m
+  pids_limit: 256
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: local
+    options:
+      max-size: 20m
+      max-file: "5"
+  networks:
+    - vvg-consumers
+
+services:
+  vector-vvg-production-1:
+    <<: *vector-common
+    container_name: automq-vector-vvg-production-1
+    environment: *vector-environment
+    volumes:
+      - ./config/vector-vvg-consumer.yaml:/etc/vector/vector.yaml:ro
+      - ./secrets/vvg-consumer:/run/secrets/kafka:ro
+      - ./state/vector-vvg-production-1:/var/lib/vector
+    ports:
+      - "${VVG_METRICS_BIND_IP}:19598:9598"
+
+  vector-vvg-production-2:
+    <<: *vector-common
+    container_name: automq-vector-vvg-production-2
+    environment: *vector-environment
+    volumes:
+      - ./config/vector-vvg-consumer.yaml:/etc/vector/vector.yaml:ro
+      - ./secrets/vvg-consumer:/run/secrets/kafka:ro
+      - ./state/vector-vvg-production-2:/var/lib/vector
+    ports:
+      - "${VVG_METRICS_BIND_IP}:19599:9598"
+
+  vector-vvg-production-3:
+    <<: *vector-common
+    container_name: automq-vector-vvg-production-3
+    environment: *vector-environment
+    volumes:
+      - ./config/vector-vvg-consumer.yaml:/etc/vector/vector.yaml:ro
+      - ./secrets/vvg-consumer:/run/secrets/kafka:ro
+      - ./state/vector-vvg-production-3:/var/lib/vector
+    ports:
+      - "${VVG_METRICS_BIND_IP}:19600:9598"
+
+networks:
+  vvg-consumers:
+    name: automq-vvg-consumers
+    driver: bridge

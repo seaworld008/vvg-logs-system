@@ -30,9 +30,12 @@ validate_static() {
   local bootstrap="${root}/scripts/bootstrap-cluster.sh"
   local vvg="${root}/config/vector-vvg-consumer.yaml"
   local gateway="${root}/config/vector-gateway-consumer.yaml"
+  local remote_vvg_compose="${root}/docker-compose.vvg-consumers.yml"
+  local remote_vvg_env="${root}/vvg-consumers.env.example"
 
   for file in "${compose}" "${env}" "${server}" "${bootstrap}" \
-      "${vvg}" "${gateway}" "${root}/scripts/render-runtime.sh" \
+      "${vvg}" "${gateway}" "${remote_vvg_compose}" \
+      "${remote_vvg_env}" "${root}/scripts/render-runtime.sh" \
       "${root}/scripts/preflight-kafka.sh" \
       "${root}/scripts/preflight-obs.sh" \
       "${root}/scripts/backup-cce-vector.sh" \
@@ -66,6 +69,27 @@ validate_static() {
     "AutoMQ consumers pin Vector 0.58.0 by digest"
   forbid_regex "${env}" '(^|[=:])[^#[:space:]]*latest([[:space:]]|$)' \
     "AutoMQ environment has no latest image"
+  require_literal "${remote_vvg_env}" 'VECTOR_IMAGE=timberio/vector@sha256:' \
+    "Remote VVG consumers require an exact Vector digest"
+  forbid_regex "${remote_vvg_env}" '(^|[=:])[^#[:space:]]*latest([[:space:]]|$)' \
+    "Remote VVG consumer environment has no latest image"
+  forbid_regex "${remote_vvg_compose}" '192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.' \
+    "Remote VVG consumer template contains no real private address"
+  forbid_regex "${remote_vvg_compose}" '^version:' \
+    "Remote VVG consumer Compose omits the obsolete version field"
+  if [[ "$(grep -Fc 'container_name: automq-vector-vvg-production-' "${remote_vvg_compose}")" == 3 ]] &&
+     [[ "$(grep -Fc './state/vector-vvg-production-' "${remote_vvg_compose}")" == 3 ]] &&
+     [[ "$(grep -Ec '19(598|599|600):9598' "${remote_vvg_compose}")" == 3 ]]; then
+    pass "Remote VVG deployment has three explicit consumers with isolated state and metrics"
+  else
+    fail "Remote VVG deployment requires three explicit consumers with isolated state and metrics"
+  fi
+  require_literal "${remote_vvg_compose}" 'stop_grace_period: 2m' \
+    "Remote VVG consumers stop gracefully"
+  require_literal "${remote_vvg_compose}" 'mem_limit: 1536m' \
+    "Remote VVG consumers keep the production memory limit"
+  require_literal "${remote_vvg_compose}" 'memswap_limit: 1536m' \
+    "Remote VVG consumers cannot consume additional swap"
   require_literal "${compose}" 'pull_policy: never' \
     "AutoMQ stack cannot pull images during startup"
   require_literal "${compose}" 'cpus: 3.0' \
@@ -387,6 +411,9 @@ validate_runtime() {
   docker compose --env-file "${root}/env.example" \
     -f "${root}/docker-compose.yml" --profile shadow --profile production config --quiet
   pass "AutoMQ Compose expands with both rollout profiles"
+  docker compose --env-file "${root}/vvg-consumers.env.example" \
+    -f "${root}/docker-compose.vvg-consumers.yml" config --quiet
+  pass "Remote VVG consumer Compose expands"
   validate_vector "${root}/config/vector-vvg-consumer.yaml" 9598
   validate_vector "${root}/config/vector-gateway-consumer.yaml" 9599
   VECTOR_IMAGE=timberio/vector:0.58.0-alpine \

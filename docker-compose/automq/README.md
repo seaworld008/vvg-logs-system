@@ -84,6 +84,33 @@ docker compose --env-file .env --profile production up -d \
 不能让 shadow 和 production 消费者同时写同一个正式后端。生产 group 首次启动
 必须先于生产者主切，使用 `latest` 建立当前末尾 offset，避免把影子历史重新灌入。
 
+### VVG consumer 跨主机放置
+
+当 VictoriaLogs 与 AutoMQ 位于不同宿主机，且 VictoriaLogs 主机通过资源门禁后，可用
+`docker-compose.vvg-consumers.yml` 将三个 VVG consumer 放到 VictoriaLogs 所在主机，
+减少解压后日志的跨机传输。复制 `vvg-consumers.env.example` 为目标机本地 `.env`，填入
+已验证的镜像 digest、VPC 内 Kafka 地址和 VictoriaLogs 地址；`.env` 与 SCRAM password
+必须保持 `0600` 且不得进入 Git。
+
+三个服务使用同一 production consumer group，但分别使用独立 state 目录和 metrics
+端口。迁移时每次只启动一个新实例，确认 group rebalance、事件收发和错误计数后，再
+优雅停止一个旧实例。Kafka offset 是恢复依据，不复制 Vector memory buffer。AutoMQ、
+Gateway consumer 和 ClickHouse 应继续同机，除非另有独立迁移与回滚方案。
+
+旧实例停止后必须禁用其自动重启策略，避免原宿主机或 Docker daemon 重启时重新加入
+生产 group。验收前可保留已停止容器作为快速回滚入口；回滚时先恢复 `restart: always`
+再逐实例启动。远端放置生效后，日常执行原 AutoMQ Compose 时不得再次启动本地
+`vector-vvg-production` 服务。
+
+目标机使用旧版 Compose 时先运行：
+
+```bash
+docker-compose --env-file .env -f docker-compose.yml config --quiet
+docker image inspect "$(sed -n 's/^VECTOR_IMAGE=//p' .env)"
+```
+
+正式启动必须使用已存在的精确镜像，禁止为完成迁移临时在线拉取。
+
 ## Vector producer 清单
 
 仓库已提交两份由当前公开基线生成的完整 production清单：
