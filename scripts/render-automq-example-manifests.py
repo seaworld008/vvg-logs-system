@@ -40,6 +40,10 @@ def resources(path: Path) -> list[dict]:
     ]
 
 
+def normalized_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
 def one_resource(documents: list[dict], kind: str) -> dict:
     matches = [document for document in documents if document.get("kind") == kind]
     if len(matches) != 1:
@@ -146,7 +150,7 @@ def main() -> None:
             render(pipeline, source, candidate)
             validate_pair(pipeline, source, candidate)
             committed = REPO_ROOT / destination
-            if not committed.exists() or committed.read_bytes() != candidate.read_bytes():
+            if not committed.exists() or normalized_text(committed) != normalized_text(candidate):
                 failures.append(destination.as_posix())
 
     if failures:
