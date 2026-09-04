@@ -71,9 +71,98 @@ const validateNightingale = () => {
   if (datasourceVariables.length !== 1) {
     throw new Error("Nightingale dashboard must contain one Prometheus datasource variable");
   }
+  const dataPanels = panels.filter((panel) => panel.type !== "row");
+  if (dataPanels.some((panel) => Object.hasOwn(panel.options?.standardOptions ?? {}, "util"))) {
+    throw new Error("Nightingale dashboard must not use the legacy util unit key");
+  }
+  if (dataPanels.some((panel) => !Object.hasOwn(panel.options?.standardOptions ?? {}, "unit"))) {
+    throw new Error("Every Nightingale data panel must declare a native unit");
+  }
+  const availableMemory = panels.find((panel) => panel.name === "Available memory");
+  if (availableMemory?.targets?.[0]?.expr !== 'sum(vm_available_memory_bytes{job=~"$job", instance=~"$instance"})') {
+    throw new Error("Nightingale available-memory query is missing");
+  }
+  const expectedUnits = new Map([
+    ["Total log entries", "short"],
+    ["Insert req/s", "reqps"],
+    ["Disk space usage", "bytesIEC"],
+    ["Request duration p99", "seconds"],
+    ["Total memory % usage ($instance)", "percentUnit"],
+  ]);
+  for (const [name, unit] of expectedUnits) {
+    const matchingPanels = panels.filter((panel) => panel.name === name);
+    if (!matchingPanels.length || matchingPanels.some((panel) => panel.options.standardOptions.unit !== unit)) {
+      throw new Error(`Unexpected Nightingale unit for ${name}`);
+    }
+  }
 };
 
-if (process.argv.includes("--check")) {
+const normalizeNightingale = () => {
+  const dashboard = JSON.parse(readFileSync(nightingaleOutput, "utf8"));
+  const upstreamDashboard = JSON.parse(readFileSync(output, "utf8"));
+  const upstreamUnits = new Map();
+  const collectUnits = (panels) => {
+    for (const panel of panels) {
+      if (panel.title) upstreamUnits.set(panel.title, panel.fieldConfig?.defaults?.unit ?? "none");
+      if (panel.panels) collectUnits(panel.panels);
+    }
+  };
+  collectUnits(upstreamDashboard.panels);
+  const unitMap = new Map([
+    ["bytes", "bytesIEC"],
+    ["none", "none"],
+    ["percentunit", "percentUnit"],
+    ["reqps", "reqps"],
+    ["s", "seconds"],
+    ["short", "short"],
+  ]);
+  const nativeUnitOverrides = new Map([
+    ["Insert req/s", "reqps"],
+    ["Read req/s", "reqps"],
+    ["Requests rate", "reqps"],
+    ["Requests error rate", "reqps"],
+    ["Request rate", "reqps"],
+    ["Query rate", "reqps"],
+    ["TCP connections rate ($instance)", "reqps"],
+    ["VictoriaLogs internal logging", "mps"],
+    ["Memory allocations rate", "bytesSecIEC"],
+    ["Disk writes/reads ($instance)", "bytesSecIEC"],
+  ]);
+  const visit = (panels) => {
+    for (const panel of panels) {
+      if (panel.type !== "row") {
+        const standardOptions = panel.options?.standardOptions ?? {};
+        if (Object.hasOwn(standardOptions, "util")) {
+          standardOptions.unit = standardOptions.util;
+          delete standardOptions.util;
+        }
+        const upstreamUnit = upstreamUnits.get(panel.name);
+        if (upstreamUnit !== undefined) standardOptions.unit = unitMap.get(upstreamUnit) ?? "none";
+        if (nativeUnitOverrides.has(panel.name)) standardOptions.unit = nativeUnitOverrides.get(panel.name);
+        panel.options.standardOptions = standardOptions;
+      }
+      if (panel.name === "Available memory") {
+        panel.targets = [
+          {
+            refId: "A",
+            expr: 'sum(vm_available_memory_bytes{job=~"$job", instance=~"$instance"})',
+            legend: "total",
+            instant: true,
+          },
+        ];
+      }
+      if (panel.panels) visit(panel.panels);
+    }
+  };
+  visit(dashboard.configs.panels);
+  writeFileSync(nightingaleOutput, `${JSON.stringify(dashboard, null, 2)}\n`, "utf8");
+};
+
+if (process.argv.includes("--normalize-nightingale")) {
+  normalizeNightingale();
+  validateNightingale();
+  console.log(`Normalized VictoriaLogs ${version} Nightingale dashboard units and targets`);
+} else if (process.argv.includes("--check")) {
   validate(readFileSync(output));
   validateNightingale();
   console.log(`Verified VictoriaLogs ${version} Grafana and Nightingale dashboards (${expectedSha256})`);
