@@ -33,11 +33,6 @@ VVG 直写基线位于 `k8s-deployment/vector/vvg/direct-containerd.yaml`，Gate
 [日志链路选型与 Kubernetes 快速启用指南](docs/log-pipeline-selection.md)。仓库保留全部
 通用方案；生产管理服务器顶层只保留当前启用清单，旧现场文件带 SHA-256归档。
 
-![AutoMQ 原生夜莺大屏脱敏预览](docs/images/automq-dashboard-overview.png)
-
-上图使用示例值展示 AutoMQ 原生夜莺大屏结构；不包含生产地址、账号、消费组、桶名或
-运行数据。大屏和告警属于金龄云 SaaS 日志系统，生产导入时放入对应业务组。
-
 ## 快速入口
 
 - [快速开始](#快速开始)
@@ -340,7 +335,6 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 - [生产日志检索大屏配置与导入指南](docs/grafana-victorialogs-log-search-dashboard-guide.md)
 - [Grafana/VictoriaLogs 查询性能与升级运行手册](docs/grafana-victorialogs-query-performance-runbook.md)
 - [Vector/VictoriaLogs 延迟排查与升级运行手册](docs/vector-victorialogs-latency-runbook.md)
-- [VictoriaLogs 官方运行监控大屏](docker-compose/victorialogs/monitoring/README.md)
 - [故障排查指南](docs/troubleshooting.md)
 - [AI Agent 配置、升级与验收指南](docs/ai-agent-operations-guide.md)
 
@@ -357,6 +351,20 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 字段模板参考：
 
 - [研发现场日志查询与过滤参考](docs/grafana-victorialogs-研发现场日志查询%20&%20过滤手册.md)：包含可选结构化字段示例，使用前应按当前日志字段核对。
+
+## 附加方案：AutoMQ 与 VictoriaLogs 运行监控
+
+以下夜莺大屏是日志链路的运行监控补充，不替代 VVG 日志检索工作台。AutoMQ大屏覆盖
+集群、流量、积压、S3/WAL、KRaft和 JVM；VictoriaLogs大屏采用官方 `v1.52.0` 单机
+模板，覆盖写入、查询、存储与资源状态。配置和导入说明见
+[AutoMQ监控资产](docker-compose/automq/monitoring/README.md) 与
+[VictoriaLogs监控资产](docker-compose/victorialogs/monitoring/README.md)。
+
+| AutoMQ 生产集群监控 | VictoriaLogs 单机监控 |
+|---|---|
+| ![AutoMQ 夜莺监控大屏脱敏预览](docs/images/automq-dashboard-overview.png) | ![VictoriaLogs 夜莺监控大屏脱敏预览](docs/images/victorialogs-dashboard-overview.png) |
+
+预览图使用示例值和重绘时间序列，不包含生产地址、账号、消费组、桶名或运行数据。
 
 ## 附加方案：Gateway 结构化日志分析
 

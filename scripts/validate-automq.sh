@@ -53,6 +53,7 @@ validate_static() {
       "docker-compose/victorialogs/monitoring/nightingale/victorialogs-v1.52.0.json" \
       "docs/decisions/0002-automq-object-storage-log-buffer.md" \
       "docs/images/automq-dashboard-overview.png" \
+      "docs/images/victorialogs-dashboard-overview.png" \
       "scripts/render-automq-vector-manifest.py" \
       "scripts/render-automq-example-manifests.py" \
       "scripts/render-automq-nightingale-dashboard.mjs" \
@@ -361,6 +362,9 @@ PY
   require_literal "README.md" \
     'docs/images/automq-dashboard-overview.png' \
     "README displays the sanitized AutoMQ dashboard preview"
+  require_literal "README.md" \
+    'docs/images/victorialogs-dashboard-overview.png' \
+    "README displays the sanitized VictoriaLogs dashboard preview"
   forbid_regex "${gateway}" 'requestHeaders|responseHeaders|requestBody|responseBody' \
     "Gateway consumer cannot persist raw headers or bodies"
   require_literal "scripts/requirements-automq.txt" 'PyYAML==6.0.3' \
