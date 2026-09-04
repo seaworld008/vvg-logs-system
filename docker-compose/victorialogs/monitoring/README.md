@@ -24,7 +24,9 @@ dashboard expects a Prometheus-compatible datasource and the standard `job`,
 of the same pinned dashboard. It keeps all 73 panels, removes the duplicate
 datasource variable created by the compatibility importer, and converts the
 single unsupported Grafana table (`Non-default flags`) to a native bar gauge.
-No metric query is changed.
+It also moves imported units from the obsolete `util` key to Nightingale v9's
+`unit` key and restores the `Available memory` target dropped by the Grafana
+compatibility importer. Other metric queries are unchanged.
 
 Import the native JSON into the Jinling Cloud SaaS business group and select
 the existing VictoriaMetrics datasource. The production vmagent must scrape
@@ -35,6 +37,7 @@ Refresh the pinned copy only when VictoriaLogs itself is upgraded:
 
 ```bash
 node scripts/vendor-victorialogs-dashboard.mjs
+node scripts/vendor-victorialogs-dashboard.mjs --normalize-nightingale
 node scripts/vendor-victorialogs-dashboard.mjs --check
 ```
 

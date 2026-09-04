@@ -123,7 +123,7 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "short"
           },
           "legend": {
             "displayMode": "list"
@@ -177,7 +177,7 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "short"
           },
           "legend": {
             "displayMode": "list"
@@ -231,7 +231,7 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "reqps"
           },
           "legend": {
             "displayMode": "list"
@@ -285,7 +285,7 @@
             ]
           },
           "standardOptions": {
-            "util": "bytesIEC"
+            "unit": "bytesIEC"
           },
           "legend": {
             "displayMode": "list"
@@ -339,7 +339,7 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "short"
           },
           "legend": {
             "displayMode": "list"
@@ -393,7 +393,7 @@
             ]
           },
           "standardOptions": {
-            "util": "bytesIEC"
+            "unit": "bytesIEC"
           },
           "legend": {
             "displayMode": "list"
@@ -447,7 +447,7 @@
             ]
           },
           "standardOptions": {
-            "util": "bytesIEC"
+            "unit": "bytesIEC"
           },
           "legend": {
             "displayMode": "list"
@@ -501,7 +501,7 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "reqps"
           },
           "legend": {
             "displayMode": "list"
@@ -555,7 +555,7 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "none"
           },
           "legend": {
             "displayMode": "list"
@@ -589,7 +589,14 @@
           "y": 5,
           "i": "d0913cc9-e0cc-45c0-a0e6-a82cb753563f"
         },
-        "targets": [],
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(vm_available_memory_bytes{job=~\"$job\", instance=~\"$instance\"})",
+            "legend": "total",
+            "instant": true
+          }
+        ],
         "options": {
           "valueMappings": [],
           "thresholds": {
@@ -603,7 +610,7 @@
             ]
           },
           "standardOptions": {
-            "util": "bytesIEC"
+            "unit": "bytesIEC"
           },
           "legend": {
             "displayMode": "list"
@@ -681,8 +688,8 @@
             ]
           },
           "standardOptions": {
-            "util": "none",
-            "min": 0
+            "min": 0,
+            "unit": "short"
           },
           "legend": {
             "displayMode": "list",
@@ -742,8 +749,8 @@
             ]
           },
           "standardOptions": {
-            "util": "none",
-            "min": 0
+            "min": 0,
+            "unit": "reqps"
           },
           "legend": {
             "displayMode": "list",
@@ -808,8 +815,8 @@
             ]
           },
           "standardOptions": {
-            "util": "none",
-            "min": 0
+            "min": 0,
+            "unit": "reqps"
           },
           "legend": {
             "displayMode": "list",
@@ -869,8 +876,8 @@
             ]
           },
           "standardOptions": {
-            "util": "seconds",
-            "min": 0
+            "min": 0,
+            "unit": "seconds"
           },
           "legend": {
             "displayMode": "list",
@@ -930,8 +937,8 @@
             ]
           },
           "standardOptions": {
-            "util": "bytesIEC",
-            "min": 0
+            "min": 0,
+            "unit": "bytesIEC"
           },
           "legend": {
             "displayMode": "list",
@@ -991,7 +998,7 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "mps"
           },
           "legend": {
             "displayMode": "list",
@@ -1066,9 +1073,9 @@
             ]
           },
           "standardOptions": {
-            "util": "percentUnit",
             "min": 0,
-            "max": 1
+            "max": 1,
+            "unit": "percentUnit"
           },
           "legend": {
             "displayMode": "list",
@@ -1128,8 +1135,8 @@
             ]
           },
           "standardOptions": {
-            "util": "percentUnit",
-            "min": 0
+            "min": 0,
+            "unit": "percentUnit"
           },
           "legend": {
             "displayMode": "list",
@@ -1185,9 +1192,9 @@
             ]
           },
           "standardOptions": {
-            "util": "bytesIEC",
             "min": 0,
-            "decimals": 0
+            "decimals": 0,
+            "unit": "bytesSecIEC"
           },
           "legend": {
             "displayMode": "list",
@@ -1252,10 +1259,10 @@
             ]
           },
           "standardOptions": {
-            "util": "percentUnit",
             "min": 0,
             "max": 1,
-            "decimals": 0
+            "decimals": 0,
+            "unit": "percentUnit"
           },
           "legend": {
             "displayMode": "list",
@@ -1315,9 +1322,9 @@
             ]
           },
           "standardOptions": {
-            "util": "percentUnit",
             "min": 0,
-            "max": 1
+            "max": 1,
+            "unit": "percentUnit"
           },
           "legend": {
             "displayMode": "list",
@@ -1378,9 +1385,9 @@
             ]
           },
           "standardOptions": {
-            "util": "percentUnit",
             "min": 0,
-            "decimals": 0
+            "decimals": 0,
+            "unit": "percentUnit"
           },
           "legend": {
             "displayMode": "list",
@@ -1445,7 +1452,7 @@
             ]
           },
           "standardOptions": {
-            "util": "bytesIEC"
+            "unit": "bytesSecIEC"
           },
           "legend": {
             "displayMode": "list",
@@ -1510,7 +1517,7 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "short"
           },
           "legend": {
             "displayMode": "list",
@@ -1570,9 +1577,9 @@
             ]
           },
           "standardOptions": {
-            "util": "percentUnit",
             "min": 0,
-            "decimals": 2
+            "decimals": 2,
+            "unit": "percentUnit"
           },
           "legend": {
             "displayMode": "list",
@@ -1633,9 +1640,9 @@
             ]
           },
           "standardOptions": {
-            "util": "percentUnit",
             "min": 0,
-            "decimals": 0
+            "decimals": 0,
+            "unit": "percentUnit"
           },
           "legend": {
             "displayMode": "list",
@@ -1695,8 +1702,8 @@
             ]
           },
           "standardOptions": {
-            "util": "none",
-            "min": 0
+            "min": 0,
+            "unit": "short"
           },
           "legend": {
             "displayMode": "list",
@@ -1756,8 +1763,8 @@
             ]
           },
           "standardOptions": {
-            "util": "none",
-            "min": 0
+            "min": 0,
+            "unit": "reqps"
           },
           "legend": {
             "displayMode": "list",
@@ -1817,9 +1824,9 @@
             ]
           },
           "standardOptions": {
-            "util": "percentUnit",
             "min": 0,
-            "decimals": 0
+            "decimals": 0,
+            "unit": "percentUnit"
           },
           "legend": {
             "displayMode": "list",
@@ -1878,9 +1885,9 @@
             ]
           },
           "standardOptions": {
-            "util": "none",
             "min": 0,
-            "decimals": 0
+            "decimals": 0,
+            "unit": "short"
           },
           "legend": {
             "displayMode": "list",
@@ -1939,9 +1946,9 @@
             ]
           },
           "standardOptions": {
-            "util": "none",
             "min": 0,
-            "decimals": 0
+            "decimals": 0,
+            "unit": "short"
           },
           "legend": {
             "displayMode": "list",
@@ -2001,9 +2008,9 @@
             ]
           },
           "standardOptions": {
-            "util": "seconds",
             "min": 0,
-            "decimals": 0
+            "decimals": 0,
+            "unit": "seconds"
           },
           "legend": {
             "displayMode": "list",
@@ -2077,8 +2084,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "none",
-                "decimals": 0
+                "decimals": 0,
+                "unit": "none"
               },
               "legend": {
                 "displayMode": "list",
@@ -2138,8 +2145,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "none",
-                "min": 0
+                "min": 0,
+                "unit": "short"
               },
               "legend": {
                 "displayMode": "list",
@@ -2261,7 +2268,7 @@
                 ]
               },
               "standardOptions": {
-                "util": "none"
+                "unit": "short"
               },
               "legend": {
                 "displayMode": "list",
@@ -2333,7 +2340,7 @@
                 ]
               },
               "standardOptions": {
-                "util": "none"
+                "unit": "short"
               },
               "legend": {
                 "displayMode": "list"
@@ -2391,7 +2398,7 @@
                 ]
               },
               "standardOptions": {
-                "util": "none"
+                "unit": "short"
               },
               "legend": {
                 "displayMode": "list",
@@ -2451,7 +2458,7 @@
                 ]
               },
               "standardOptions": {
-                "util": "percentUnit"
+                "unit": "percentUnit"
               },
               "legend": {
                 "displayMode": "list",
@@ -2511,8 +2518,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "none",
-                "min": 0
+                "min": 0,
+                "unit": "short"
               },
               "legend": {
                 "displayMode": "list",
@@ -2572,7 +2579,7 @@
                 ]
               },
               "standardOptions": {
-                "util": "seconds"
+                "unit": "seconds"
               },
               "legend": {
                 "displayMode": "list",
@@ -2632,8 +2639,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "bytesIEC",
-                "min": 0
+                "min": 0,
+                "unit": "bytesIEC"
               },
               "legend": {
                 "displayMode": "list",
@@ -2693,8 +2700,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "none",
-                "min": 0
+                "min": 0,
+                "unit": "short"
               },
               "legend": {
                 "displayMode": "list",
@@ -2750,7 +2757,7 @@
                 ]
               },
               "standardOptions": {
-                "util": "none"
+                "unit": "none"
               },
               "legend": {
                 "displayMode": "list",
@@ -2831,8 +2838,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "none",
-                "min": 0
+                "min": 0,
+                "unit": "short"
               },
               "legend": {
                 "displayMode": "list",
@@ -2892,8 +2899,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "none",
-                "min": 0
+                "min": 0,
+                "unit": "reqps"
               },
               "legend": {
                 "displayMode": "list",
@@ -2953,8 +2960,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "seconds",
-                "min": 0
+                "min": 0,
+                "unit": "seconds"
               },
               "legend": {
                 "displayMode": "list",
@@ -3014,8 +3021,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "seconds",
-                "min": 0
+                "min": 0,
+                "unit": "seconds"
               },
               "legend": {
                 "displayMode": "list",
@@ -3080,9 +3087,9 @@
                 ]
               },
               "standardOptions": {
-                "util": "none",
                 "min": 0,
-                "decimals": 0
+                "decimals": 0,
+                "unit": "short"
               },
               "legend": {
                 "displayMode": "list",
@@ -3142,8 +3149,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "none",
-                "min": 0
+                "min": 0,
+                "unit": "short"
               },
               "legend": {
                 "displayMode": "list",
@@ -3203,8 +3210,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "none",
-                "min": 0
+                "min": 0,
+                "unit": "short"
               },
               "legend": {
                 "displayMode": "list",
@@ -3264,7 +3271,7 @@
                 ]
               },
               "standardOptions": {
-                "util": "none"
+                "unit": "reqps"
               },
               "legend": {
                 "displayMode": "list",
@@ -3324,8 +3331,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "seconds",
-                "min": 0
+                "min": 0,
+                "unit": "seconds"
               },
               "legend": {
                 "displayMode": "list",
@@ -3401,8 +3408,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "none",
-                "min": 0
+                "min": 0,
+                "unit": "reqps"
               },
               "legend": {
                 "displayMode": "list",
@@ -3462,8 +3469,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "seconds",
-                "min": 0
+                "min": 0,
+                "unit": "seconds"
               },
               "legend": {
                 "displayMode": "list",
@@ -3528,8 +3535,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "none",
-                "min": 0
+                "min": 0,
+                "unit": "short"
               },
               "legend": {
                 "displayMode": "list",
@@ -3589,7 +3596,7 @@
                 ]
               },
               "standardOptions": {
-                "util": "none"
+                "unit": "reqps"
               },
               "legend": {
                 "displayMode": "list",
@@ -3665,8 +3672,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "none",
-                "min": 0
+                "min": 0,
+                "unit": "short"
               },
               "legend": {
                 "displayMode": "list",
@@ -3726,8 +3733,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "bytesIEC",
-                "min": 0
+                "min": 0,
+                "unit": "bytesIEC"
               },
               "legend": {
                 "displayMode": "list",
@@ -3787,8 +3794,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "bytesIEC",
-                "min": 0
+                "min": 0,
+                "unit": "bytesIEC"
               },
               "legend": {
                 "displayMode": "list",
@@ -3848,8 +3855,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "bytesIEC",
-                "min": 0
+                "min": 0,
+                "unit": "bytesIEC"
               },
               "legend": {
                 "displayMode": "list",
@@ -3909,8 +3916,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "bytesIEC",
-                "min": 0
+                "min": 0,
+                "unit": "bytesIEC"
               },
               "legend": {
                 "displayMode": "list",
@@ -3970,8 +3977,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "bytesIEC",
-                "min": 0
+                "min": 0,
+                "unit": "bytesIEC"
               },
               "legend": {
                 "displayMode": "list",
@@ -4031,8 +4038,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "bytesIEC",
-                "min": 0
+                "min": 0,
+                "unit": "bytesIEC"
               },
               "legend": {
                 "displayMode": "list",
@@ -4092,8 +4099,8 @@
                 ]
               },
               "standardOptions": {
-                "util": "bytesIEC",
-                "min": 0
+                "min": 0,
+                "unit": "bytesIEC"
               },
               "legend": {
                 "displayMode": "list",
