@@ -48,11 +48,15 @@ validate_static() {
       "${root}/config/obs-lifecycle.json" \
       "${root}/config/prometheus.yml.template" \
       "${root}/monitoring/nightingale/automq-cluster.json" \
+      "docker-compose/victorialogs/monitoring/README.md" \
+      "docker-compose/victorialogs/monitoring/grafana/victorialogs-v1.52.0.json" \
+      "docker-compose/victorialogs/monitoring/nightingale/victorialogs-v1.52.0.json" \
       "docs/decisions/0002-automq-object-storage-log-buffer.md" \
       "docs/images/automq-dashboard-overview.png" \
       "scripts/render-automq-vector-manifest.py" \
       "scripts/render-automq-example-manifests.py" \
       "scripts/render-automq-nightingale-dashboard.mjs" \
+      "scripts/vendor-victorialogs-dashboard.mjs" \
       "k8s-deployment/vector/vvg/automq-containerd-production.yaml" \
       "k8s-deployment/vector/gateway/automq-containerd-production.yaml" \
       "scripts/requirements-automq.txt"; do
@@ -118,6 +122,14 @@ validate_static() {
     "vmagent reads the VictoriaMetrics password from a secret file"
   forbid_regex "${compose}" 'remoteWrite\.basicAuth\.(username|password)=' \
     "vmagent Compose contains no inline remote-write credentials"
+  require_literal "${env}" 'VICTORIALOGS_METRICS_TARGET=victorialogs.example.internal:9428' \
+    "AutoMQ environment declares a sanitized VictoriaLogs metrics target"
+  require_literal "${root}/config/prometheus.yml.template" 'job_name: victorialogs' \
+    "vmagent scrapes VictoriaLogs metrics"
+  require_literal "${root}/config/prometheus.yml.template" '__VICTORIALOGS_METRICS_TARGET__' \
+    "VictoriaLogs metrics target is rendered from the environment"
+  require_literal "${root}/config/prometheus.yml.template" 'job_name: automq-vmagent' \
+    "vmagent scrapes its own health metrics"
   require_literal "${server}" 's3.wal.cache.size=524288000' \
     "AutoMQ WAL cache uses the official Tiny value"
   require_literal "${server}" 's3.block.cache.size=104857600' \
@@ -295,15 +307,45 @@ import json, sys
 dashboard = json.load(open(sys.argv[1], encoding="utf-8"))
 assert dashboard["ident"] == "automq-production-cluster"
 panels = dashboard["configs"]["panels"]
-assert len(panels) >= 12
+assert len(panels) >= 35
 assert all(panel["type"] != "unknown" for panel in panels)
+assert sum(panel["type"] == "row" for panel in panels) >= 5
+assert all(panel.get("name") for panel in panels)
+assert all(panel.get("description") for panel in panels if panel["type"] != "row")
+assert all(
+    panel.get("options", {}).get("standardOptions", {}).get("unit") is not None
+    for panel in panels if panel["type"] != "row"
+)
 assert any("vector_kafka_consumer_lag" in target["expr"] for panel in panels for target in panel["targets"])
 assert any("vector_buffer_size_bytes" in target["expr"] for panel in panels for target in panel["targets"])
+assert any("kafka_stream_wal_pending_upload_bytes" in target["expr"] for panel in panels for target in panel["targets"])
 PY
   then
     pass "Nightingale dashboard uses supported panels and covers lag and producer buffers"
   else
     fail "Nightingale dashboard structure is invalid"
+  fi
+  if command -v node >/dev/null 2>&1; then
+    if node scripts/render-automq-nightingale-dashboard.mjs --check; then
+      pass "Nightingale AutoMQ dashboard matches its renderer"
+    else
+      fail "Nightingale AutoMQ dashboard must be freshly rendered"
+    fi
+    if node scripts/vendor-victorialogs-dashboard.mjs --check; then
+      pass "VictoriaLogs dashboard matches the official v1.52.0 artifact"
+    else
+      fail "VictoriaLogs dashboard provenance or structure is invalid"
+    fi
+  else
+    pass "Node unavailable; Nightingale dashboard passed structural validation"
+    if printf '%s  %s\n' \
+      '07a17ece43627672bdc8335a6e51a881c11ae58f184f51623094e204d84be569' \
+      'docker-compose/victorialogs/monitoring/grafana/victorialogs-v1.52.0.json' \
+      | sha256sum -c - >/dev/null; then
+      pass "VictoriaLogs dashboard matches the official v1.52.0 SHA-256"
+    else
+      fail "VictoriaLogs dashboard SHA-256 is invalid"
+    fi
   fi
   require_literal "${root}/README.md" '不得放入' \
     "AutoMQ monitoring is owned by the Jinling Cloud SaaS project"

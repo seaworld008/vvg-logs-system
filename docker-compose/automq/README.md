@@ -23,6 +23,7 @@ Vector 直写 VictoriaLogs/ClickHouse 配置，以减少组件与故障面；直
 - Kafka protocol `3.9.1`；
 - Vector `0.58.0-alpine`；
 - vmagent `v1.147.0`；
+- vmagent 同时抓取 AutoMQ、Vector、宿主机、VictoriaLogs 与自身指标；
 - AutoMQ `3 CPU / 6 GiB`，官方 Tiny 内存参数（Heap 1 GiB、Direct Memory 1.5 GiB）；
 - VVG Topic 12 partitions，Gateway Topic 6 partitions；
 - 单条 4 MiB、Zstd、72 小时 retention、replication factor 1；
@@ -83,6 +84,10 @@ docker compose --env-file .env --profile production up -d \
 
 不能让 shadow 和 production 消费者同时写同一个正式后端。生产 group 首次启动
 必须先于生产者主切，使用 `latest` 建立当前末尾 offset，避免把影子历史重新灌入。
+
+`.env` 中的 `VICTORIALOGS_METRICS_TARGET` 只填写 `host:port`，由
+`scripts/render-runtime.sh` 渲染为 `victorialogs` scrape job。更换该单文件 bind mount
+后必须只重建 `vmagent`，不能假定旧容器会自动读取新 inode。
 
 ### VVG consumer 跨主机放置
 

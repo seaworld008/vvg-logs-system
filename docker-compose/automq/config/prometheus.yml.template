@@ -33,3 +33,13 @@ scrape_configs:
       - targets: ["host.docker.internal:9100"]
         labels:
           automq_host: "true"
+
+  - job_name: victorialogs
+    static_configs:
+      - targets: ["__VICTORIALOGS_METRICS_TARGET__"]
+        labels:
+          deployment: "vvg-production"
+
+  - job_name: automq-vmagent
+    static_configs:
+      - targets: ["vmagent:8429"]
