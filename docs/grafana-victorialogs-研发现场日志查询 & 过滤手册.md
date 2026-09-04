@@ -3,7 +3,7 @@
 > 适用：Grafana **Explore** 页面或面板，数据源选择 **VictoriaLogs**。  
 > 目标：为研发现场排障提供查询模板；复制前必须按当前日志字段和 LogsQL 版本核对。
 
-当前 VVG 生产 Dashboard 的字段契约是 `namespace`、`container`、`pod`、`level` 和 `message`，以[生产日志检索大屏配置与导入指南](grafana-victorialogs-log-search-dashboard-guide.md)为准。本文中的 `status`、`path`、`responsetime_ms` 等属于可选结构化字段；未在 Vector 侧生成这些字段时，对应示例不可直接使用。Gateway 结构化访问日志请使用独立的 [ClickHouse Gateway 方案](../clickhouse-gateway/README.md)。
+当前 VVG 生产 Dashboard 的字段契约是 `namespace`、`container`、`pod`、`level` 和 `message`，以[生产日志检索大屏配置与导入指南](grafana-victorialogs-log-search-dashboard-guide.md)为准。本文中的 `status`、`path`、`responsetime_ms` 等属于可选结构化字段；未在 Vector 侧生成这些字段时，对应示例不可直接使用。Gateway 结构化访问日志请使用 [Gateway Vector 路线配置](../k8s-deployment/vector/gateway/README.md)。
 
 ---
 

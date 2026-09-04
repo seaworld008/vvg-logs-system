@@ -19,6 +19,10 @@ buffer，无法提供统一的 72 小时缓冲、集中 lag 可观测性和独�
 2. 中大规模、突发明显或需要隔离存储抖动时，使用
    `Vector -> AutoMQ + S3 -> Vector consumer -> VictoriaLogs/ClickHouse`。
 
+四条受支持链路的稳定 Kubernetes入口由
+`docs/log-pipeline-selection.md` 统一索引。AutoMQ producer YAML必须由直写源清单生成，
+以保证解析、GeoIP、字段和 checkpoint策略只维护一份。
+
 当前部署采用用户批准的单节点 combined KRaft 例外，Broker 与已有监控、ClickHouse
 共享宿主机。AutoMQ 固定 `3 CPU / 6 GiB` cgroup，但 JVM 与缓存使用官方 Tiny 参数：
 Heap 1 GiB、Direct Memory 1.5 GiB、WAL cache 500 MiB、Block cache 100 MiB、upload

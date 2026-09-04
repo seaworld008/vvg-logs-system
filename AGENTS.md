@@ -40,7 +40,10 @@
 
 ## Vector -> ClickHouse -> Grafana 专区
 
-`clickhouse-gateway/` 是结构化 Gateway 访问日志的独立方案，不得与 VictoriaLogs 原始日志链路混改。
+Gateway结构化日志使用统一服务目录：ClickHouse位于 `docker-compose/clickhouse/`，
+Vector位于 `k8s-deployment/vector/gateway/`，Grafana可选配置位于
+`docker-compose/grafana/routes/gateway-clickhouse/`。不得与 VictoriaLogs原始日志链路混改，
+也不得重新创建按方案重复嵌套服务的 `clickhouse-gateway/` 目录。
 
 - Vector 必须保留 checkpoint，使用每节点独立持久目录、disk buffer、`when_full: block` 和 sink acknowledgement。
 - ClickHouse `wait_for_async_insert=1` 时，Vector 请求超时必须高于服务端异步写入等待；当前基线为 180 秒，禁止有限 `retry_attempts`。
@@ -49,7 +52,7 @@
 - system log 必须有有限 TTL。清理 `system` 表前先验证其 DDL 注释、所有权和一致性备份，禁止按名称批量删除业务表。
 - 已有业务表的分区、ORDER BY、TTL、Materialized View 和 projection 不得在镜像升级中顺带修改。新项目使用专区内的月分区和紧凑主键模板。
 - Grafana 使用只读 ClickHouse 用户。不得把 `default` 管理账号或 Vector 写入账号复用到 datasource。
-- GeoIP 使用固定 GitHub Release 中的 DB-IP City Lite、精确 SHA-256 和持久目录；禁止使用现场华为云/OBS/CDN 地址或浮动下载链接，Dashboard 必须保留 DB-IP 归属链接。
+- GeoIP 使用固定 GitHub Release 中的 DB-IP City Lite、精确 SHA-256 和持久目录；数据声明固定在 `k8s-deployment/vector/gateway/geoip/NOTICE.md`，禁止使用现场华为云/OBS/CDN 地址或浮动下载链接，Dashboard 必须保留 DB-IP 归属链接。
 - KubeDoor Gateway Dashboard 的仓库 JSON 是默认大屏。导入 Grafana API 导出时运行 `node scripts/sanitize-clickhouse-gateway-dashboard.mjs RAW_EXPORT.json`，再运行校验；不得恢复为旧的 12 面板简化版。
 
 ## AutoMQ + 对象存储专区
@@ -66,6 +69,7 @@
 - shadow 与 production producer 的 metrics hostPort相同，主切前必须先停止 shadow；shadow 与 production consumer不得同时写同一正式后端。
 - 生产者清单必须由 `scripts/render-automq-vector-manifest.py` 从当前真实源 manifest生成，禁止用仓库公开示例覆盖现场解析、GeoIP或checkpoint。
 - VVG/Gateway 直写配置必须长期保留；小到中等规模优先直写，中大规模且需要集中缓冲时再采用 AutoMQ + 对象存储。
+- 四条 production链路由 `docs/log-pipeline-selection.md` 统一索引；直写清单是源，仓库 AutoMQ清单必须由 `scripts/render-automq-example-manifests.py` 生成并通过防漂移检查。
 - 本阶段不得停止或重建 `redis-v9`、`elk_redis`、Logstash、Kibana、Elasticsearch、VictoriaLogs、ClickHouse、Grafana或业务服务。
 
 ## Dashboard 修改

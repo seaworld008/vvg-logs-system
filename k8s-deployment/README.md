@@ -1,6 +1,7 @@
 # Vector Kubernetes 部署
 
-本目录提供 Docker CRI 和 Containerd CRI 两套 DaemonSet 模板，用于收集 Java 标准输出日志并写入 VictoriaLogs。
+本目录是仓库中唯一的 Kubernetes Vector部署入口，按日志类型选择 `vvg/` 或
+`gateway/`，再选择 direct或 AutoMQ production配置。
 
 当前基线：Vector `0.58.0`。生产部署必须先阅读 [延迟排查与升级运行手册](../docs/vector-victorialogs-latency-runbook.md)。
 
@@ -8,14 +9,41 @@ Grafana 查询卡顿和 VictoriaLogs 查询并发调优属于展示/存储层问
 
 ## 配置选择
 
+```text
+k8s-deployment/vector/
+  vvg/
+    direct-containerd.yaml
+    direct-docker.yaml
+    automq-containerd-production.yaml
+  gateway/
+    direct-containerd.yaml
+    automq-containerd-production.yaml
+    geoip/NOTICE.md
+```
+
+完整四路线对比、Secret和切换命令见
+[日志链路选型与 Kubernetes快速启用指南](../docs/log-pipeline-selection.md)。Gateway专用
+替换项见 [Gateway Vector README](vector/gateway/README.md)。
+
 ```bash
 kubectl get nodes -o custom-columns=NAME:.metadata.name,RUNTIME:.status.nodeInfo.containerRuntimeVersion
 ```
 
-- `containerd://...`：使用 `vector-k8s-containerd-cri.yaml`
-- `docker://...`：使用 `vector-k8s-docker-cri.yaml`
+- `containerd://...`：使用 `vector/vvg/direct-containerd.yaml`
+- `docker://...`：使用 `vector/vvg/direct-docker.yaml`
 
 两个模板的采集、转换、缓冲和滚动策略一致，仅宿主机 runtime 挂载不同。
+
+VVG链路选择：
+
+| 模式 | 文件 | 适用场景 |
+| --- | --- | --- |
+| 直写 VictoriaLogs | `vector/vvg/direct-containerd.yaml` | 小到中等规模、下游稳定、组件最少 |
+| 写入 AutoMQ | `vector/vvg/automq-containerd-production.yaml` | 中大规模、突发明显、需要集中缓冲和重放 |
+
+AutoMQ 文件由直写 containerd基线生成，复用同一资源名和 checkpoint。不要同时应用
+两份 production YAML。完整 Secret、部署和回滚命令见
+[日志链路选型与快速启用指南](../docs/log-pipeline-selection.md)。
 
 ## 生产前必改
 
@@ -135,7 +163,15 @@ VictoriaLogs 支持历史事件。`rewrite_timestamp` 会把旧日志伪装成�
 ## 离线验证
 
 ```bash
-kubectl apply --dry-run=server -f vector-k8s-containerd-cri.yaml
+kubectl apply --dry-run=server -f vector/vvg/direct-containerd.yaml
+```
+
+AutoMQ production 路线使用：
+
+```bash
+python3 scripts/render-automq-example-manifests.py --check
+kubectl apply --dry-run=server \
+  -f k8s-deployment/vector/vvg/automq-containerd-production.yaml
 ```
 
 还必须提取 ConfigMap 中的 `vector.yaml`，使用目标镜像编译 VRL 和完整拓扑：
@@ -164,7 +200,7 @@ kubectl -n logging get daemonset vector -o yaml > vector-daemonset.before.yaml
 部署：
 
 ```bash
-kubectl apply -f vector-k8s-containerd-cri.yaml
+kubectl apply -f vector/vvg/direct-containerd.yaml
 kubectl -n logging rollout status daemonset/vector --timeout=300s
 ```
 

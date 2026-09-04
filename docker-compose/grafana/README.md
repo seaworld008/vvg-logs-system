@@ -80,7 +80,27 @@ Dashboard provider 每 10 秒扫描一次目录。新增或更新 JSON 后无需
 
 完整的数据契约、三种导入方式、验证、回滚和 AI agent 操作边界见 [生产日志检索大屏配置与导入指南](../../docs/grafana-victorialogs-log-search-dashboard-guide.md)。
 
-## 5. 安全升级
+## 5. Gateway ClickHouse 可选路线
+
+仓库不提供第二套 Grafana服务。需要 Gateway结构化日志大屏时，在本 Compose上叠加
+`routes/gateway-clickhouse/compose.override.example.yml`，并发布包含
+`grafana-clickhouse-datasource@4.5.1` 的新插件 release。默认 VVG-only 配置不加载
+Gateway datasource，也不会要求 ClickHouse密码。
+
+```bash
+# .env 中同时设置新的 GRAFANA_PLUGINS_DIR、精确额外插件和只读密码。
+sudo bash ../../scripts/install-grafana-plugins.sh .env
+
+docker compose --env-file .env \
+  -f docker-compose.yml \
+  -f routes/gateway-clickhouse/compose.override.example.yml \
+  config --quiet
+```
+
+完整启用和验证见
+[Grafana Gateway ClickHouse可选路线](routes/gateway-clickhouse/README.md)。
+
+## 6. 安全升级
 
 Grafana 13 会迁移 SQLite 和统一存储。升级前必须使用数据副本演练，正式切换时必须获得一致的 SQLite 备份。
 
@@ -106,7 +126,7 @@ docker logs --since 10m grafana 2>&1 \
 
 回滚到 Grafana 12 时不能只切旧镜像。必须停止新容器，同时恢复升级前 Compose、插件目录和 `grafana.db`，否则旧版本可能读取迁移后的不兼容状态。
 
-## 6. 常见问题
+## 7. 常见问题
 
 ### 插件下载卡住
 

@@ -8,10 +8,10 @@
 **/grafana-data/
 **/victoria-logs-data/
 **/vector_data/
-clickhouse-gateway/clickhouse/data/
-clickhouse-gateway/clickhouse/logs/
-clickhouse-gateway/**/secret.yaml
-clickhouse-gateway/vector/geoip/*.mmdb
+docker-compose/clickhouse/data/
+docker-compose/clickhouse/logs/
+k8s-deployment/vector/gateway/**/secret.yaml
+k8s-deployment/vector/gateway/geoip/*.mmdb
 docker-compose/mcp-victorialogs/vmauth/auth.yml
 docker-compose/mcp-victorialogs/secrets/
 **/client-bearer-token

@@ -5,13 +5,15 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
 mode="${1:---static}"
-compose="clickhouse-gateway/clickhouse/docker-compose.yml"
-retention="clickhouse-gateway/clickhouse/config/observability.xml"
-schema="clickhouse-gateway/clickhouse/initdb/001-gateway-schema.sql"
-vector_manifest="clickhouse-gateway/vector/vector-k8s-containerd.yaml"
-geoip_notice="clickhouse-gateway/vector/geoip/NOTICE.md"
-datasource="clickhouse-gateway/grafana/datasources/clickhouse.yaml"
-dashboard="clickhouse-gateway/grafana/dashboards/gateway-observability.json"
+compose="docker-compose/clickhouse/docker-compose.yml"
+retention="docker-compose/clickhouse/config/observability.xml"
+schema="docker-compose/clickhouse/initdb/001-gateway-schema.sql"
+vector_manifest="k8s-deployment/vector/gateway/direct-containerd.yaml"
+automq_manifest="k8s-deployment/vector/gateway/automq-containerd-production.yaml"
+geoip_notice="k8s-deployment/vector/gateway/geoip/NOTICE.md"
+datasource="docker-compose/grafana/routes/gateway-clickhouse/datasources/clickhouse.yaml"
+dashboard="docker-compose/grafana/routes/gateway-clickhouse/dashboards/gateway-observability.json"
+grafana_override="docker-compose/grafana/routes/gateway-clickhouse/compose.override.example.yml"
 failures=0
 
 pass() { printf 'PASS: %s\n' "$1"; }
@@ -31,14 +33,24 @@ forbid_regex() {
 
 validate_static() {
   for path in \
-    "clickhouse-gateway/README.md" \
+    "docker-compose/clickhouse/README.md" \
+    "k8s-deployment/vector/gateway/README.md" \
+    "docker-compose/grafana/routes/gateway-clickhouse/README.md" \
+    "docs/log-pipeline-selection.md" \
     "docs/vector-clickhouse-gateway-runbook.md" \
     "docs/decisions/0001-vector-clickhouse-gateway.md" \
+    "docs/decisions/0003-service-oriented-log-deployment-layout.md" \
     "docs/images/clickhouse-gateway-overview.png" \
-    "${compose}" "${retention}" "${schema}" "${vector_manifest}" "${geoip_notice}" \
-    "${datasource}" "${dashboard}"; do
+    "${compose}" "${retention}" "${schema}" "${vector_manifest}" \
+    "${automq_manifest}" "${geoip_notice}" "${datasource}" "${dashboard}" \
+    "${grafana_override}"; do
     require_file "${path}" "${path} exists"
   done
+
+  require_literal ".gitignore" 'docker-compose/clickhouse/data/' \
+    "ClickHouse runtime data is ignored in its service directory"
+  require_literal ".gitignore" 'k8s-deployment/vector/gateway/geoip/*.mmdb' \
+    "Gateway GeoIP runtime data is ignored"
 
   require_literal "${compose}" 'clickhouse-server:26.8.2.7-alpine' \
     "ClickHouse image uses the validated LTS patch"
@@ -121,6 +133,12 @@ validate_static() {
     "Gateway Vector does not rely on numeric DateTime64 inference"
   forbid_regex "${vector_manifest}" 'access_vector_error|/tmp/.*error.*\.log' \
     "Gateway parse failures cannot create an unbounded raw file"
+  require_literal "${automq_manifest}" 'compression: zstd' \
+    "Gateway AutoMQ producer uses Zstd"
+  require_literal "${automq_manifest}" 'secretName: automq-gateway-producer' \
+    "Gateway AutoMQ producer uses an independent Secret"
+  require_literal "${automq_manifest}" '- route_automq_gateway_size.normal' \
+    "Gateway AutoMQ sink receives only parsed size-routed events"
 
   require_literal "${datasource}" 'uid: gateway-clickhouse' \
     "Grafana ClickHouse datasource UID is stable"
@@ -130,6 +148,14 @@ validate_static() {
     "Grafana datasource password comes from a secret environment variable"
   forbid_regex "${datasource}" 'password:[[:space:]]+[^$]' \
     "Grafana datasource contains no plaintext password"
+  require_literal "${grafana_override}" \
+    'CLICKHOUSE_GRAFANA_PASSWORD=${CLICKHOUSE_GRAFANA_PASSWORD}' \
+    "Grafana Gateway route injects the read-only datasource password"
+  if [[ "$(grep -Fc ':ro' "${grafana_override}")" == 3 ]]; then
+    pass "Grafana Gateway route mounts all provisioning inputs read-only"
+  else
+    fail "Grafana Gateway route must mount all provisioning inputs read-only"
+  fi
   require_literal "README.md" 'docs/images/clickhouse-gateway-overview.png' \
     "README displays the sanitized Gateway Dashboard"
 
@@ -147,11 +173,18 @@ validate_static() {
   fi
 
   if grep -R -n -E '(192\.168\.|172\.18\.|([a-z0-9-]+\.)+cn([^a-z0-9-]|$)|myhuaweicloud\.com|\.obs\.)' \
-      clickhouse-gateway docs/vector-clickhouse-gateway-runbook.md \
+      docker-compose/clickhouse k8s-deployment/vector/gateway \
+      docker-compose/grafana/routes/gateway-clickhouse \
+      docs/vector-clickhouse-gateway-runbook.md \
       docs/decisions/0001-vector-clickhouse-gateway.md >/dev/null; then
     fail "Gateway ClickHouse deliverables contain no production addresses"
   else
     pass "Gateway ClickHouse deliverables contain no production addresses"
+  fi
+  if [[ -e clickhouse-gateway ]]; then
+    fail "Legacy clickhouse-gateway directory must not exist"
+  else
+    pass "Gateway assets use the service-oriented repository layout"
   fi
 }
 
@@ -173,6 +206,11 @@ validate_runtime() {
 
   docker compose -f "${compose}" config --quiet
   pass "Gateway ClickHouse Compose expands"
+  CLICKHOUSE_GRAFANA_PASSWORD=validation-password \
+    docker compose --env-file docker-compose/grafana/env.example \
+      -f docker-compose/grafana/docker-compose.yml \
+      -f "${grafana_override}" config --quiet
+  pass "Grafana Compose expands with the optional Gateway ClickHouse route"
 
   local temp_dir vector_config geoip_path expected_geoip
   temp_dir="$(mktemp -d)"

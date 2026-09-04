@@ -1,0 +1,512 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-clickhouse-gateway-config
+  namespace: logging
+data:
+  vector.yaml: |
+    timezone: Asia/Shanghai
+    data_dir: /var/lib/vector
+    secret:
+      clickhouse_auth:
+        type: directory
+        path: /var/run/secrets/clickhouse
+      automq_auth:
+        type: directory
+        path: /var/run/secrets/automq
+    api:
+      enabled: true
+      address: 0.0.0.0:8686
+    enrichment_tables:
+      geoip_table:
+        type: mmdb
+        path: /var/lib/vector/geoip/dbip-city-lite-2026-09.mmdb
+    sources:
+      gateway_logs:
+        type: file
+        include:
+        - /var/log/containers/REPLACE_GATEWAY_POD_GLOB_REPLACE_NAMESPACE_REPLACE_CONTAINER_GLOB.log
+        ignore_checkpoints: false
+        ignore_not_found: true
+        read_from: beginning
+        glob_minimum_cooldown_ms: 1000
+        oldest_first: false
+        max_read_bytes: 65536
+        max_line_bytes: 16777216
+        rotate_wait_secs: 300
+        multiline:
+          start_pattern: .*\[writeAccessLog\]\[请求日志：
+          mode: halt_before
+          condition_pattern: .*\[writeAccessLog\]\[请求日志：
+          timeout_ms: 1000
+      internal_metrics:
+        type: internal_metrics
+    transforms:
+      select_gateway_events:
+        type: filter
+        inputs:
+        - capture_automq_source_file
+        condition: contains(string(.message) ?? "", "[writeAccessLog][请求日志：")
+      parse_gateway_event:
+        type: remap
+        inputs:
+        - select_gateway_events
+        drop_on_error: true
+        reroute_dropped: true
+        source: |
+          msg = string(.message) ?? ""
+          msg = replace(msg, r'(?m)^\d{4}-\d{2}-\d{2}T[\d:.+-]+ stdout F ', "")
+
+          captured = parse_regex(msg, r'(?s)\[writeAccessLog\]\[请求日志：(?P<json>\{.*\})\]\s*$') ?? {}
+          json_text = string(captured.json) ?? ""
+          if json_text == "" { abort }
+          gateway = parse_json!(json_text)
+
+          request_headers_text = string(gateway.requestHeaders) ?? "{}"
+          request_headers = parse_json(request_headers_text) ?? {}
+          response_headers_text = string(gateway.responseHeaders) ?? "{}"
+          response_headers = parse_json(response_headers_text) ?? {}
+
+          host = string(request_headers.Host) ?? string(request_headers.host) ?? "-"
+          forwarded_for = string(request_headers."X-Forwarded-For") ?? string(request_headers."x-forwarded-for") ?? ""
+          user_agent = string(request_headers."User-Agent") ?? string(request_headers."user-agent") ?? "-"
+          referer = string(request_headers.Referer) ?? string(request_headers.referer) ?? "-"
+          protocol = string(request_headers."X-Forwarded-Proto") ?? string(request_headers."x-forwarded-proto") ?? string(gateway.schema) ?? "http"
+          method = string(gateway.requestMethod) ?? "GET"
+
+          status_text = downcase(string(gateway.httpStatus) ?? "")
+          status = 0
+          if status_text == "ok" { status = 200 }
+          if status_text == "created" { status = 201 }
+          if status_text == "accepted" { status = 202 }
+          if status_text == "no_content" { status = 204 }
+          if status_text == "moved_permanently" { status = 301 }
+          if status_text == "found" { status = 302 }
+          if status_text == "not_modified" { status = 304 }
+          if status_text == "bad_request" { status = 400 }
+          if status_text == "unauthorized" { status = 401 }
+          if status_text == "forbidden" { status = 403 }
+          if status_text == "not_found" { status = 404 }
+          if status_text == "method_not_allowed" { status = 405 }
+          if status_text == "conflict" { status = 409 }
+          if status_text == "too_many_requests" { status = 429 }
+          if status_text == "internal_server_error" { status = 500 }
+          if status_text == "bad_gateway" { status = 502 }
+          if status_text == "service_unavailable" { status = 503 }
+          if status_text == "gateway_timeout" { status = 504 }
+          if status == 0 { status = to_int(gateway.httpStatus) ?? 200 }
+
+          duration_text = replace(string(gateway.duration) ?? "0", " ms", "")
+          response_time = (to_float(duration_text) ?? 0.0) / 1000.0
+          event_time = parse_timestamp(string(gateway.endTime) ?? "", "%F %T%.3f") ??
+            parse_timestamp(string(gateway.endTime) ?? "", "%F %T") ?? now()
+
+          remote_ip = string(gateway.userIp) ?? "-"
+          xff = if forwarded_for == "" { remote_ip } else { forwarded_for }
+          xff_items = split(xff, ",", limit: 2)
+          client_ip = strip_whitespace(string(xff_items[0]) ?? remote_ip)
+          url = string(gateway.requestUrl) ?? "/"
+          url_items = split(url, "?", limit: 2)
+          path = string(url_items[0]) ?? "/"
+          query = string(url_items[1]) ?? ""
+          path_items = split(path, "/", limit: 3)
+          top_path = if length(path_items) > 1 { "/" + (string(path_items[1]) ?? "") } else { "/" }
+
+          client_city = "unknown"
+          client_region = "unknown"
+          client_country = "unknown"
+          client_latitude = null
+          client_longitude = null
+          if client_ip != "" && client_ip != "-" {
+            geoip = get_enrichment_table_record("geoip_table", {"ip": client_ip}) ?? {}
+            city_names = object(geoip.city.names) ?? {}
+            country_names = object(geoip.country.names) ?? {}
+            subdivisions = array(geoip.subdivisions) ?? []
+            region_names = {}
+            if length(subdivisions) > 0 {
+              region = object(subdivisions[0]) ?? {}
+              region_names = object(region.names) ?? {}
+            }
+            client_city = string(city_names."zh-CN") ?? string(city_names.en) ?? "unknown"
+            client_region = string(region_names."zh-CN") ?? string(region_names.en) ?? "unknown"
+            client_country = string(country_names."zh-CN") ?? string(country_names.en) ?? "unknown"
+            client_latitude = to_float(geoip.location.latitude) ?? null
+            client_longitude = to_float(geoip.location.longitude) ?? null
+          }
+
+          browser_family = "unknown"
+          browser_major = "unknown"
+          os_family = "unknown"
+          os_major = "unknown"
+          device_brand = "unknown"
+          device_model = "unknown"
+          if user_agent != "-" {
+            parsed_ua = parse_user_agent(user_agent, mode: "enriched")
+            browser_family = string(parsed_ua.browser.family) ?? "unknown"
+            browser_major = string(parsed_ua.browser.major) ?? "unknown"
+            os_family = string(parsed_ua.os.family) ?? "unknown"
+            os_major = string(parsed_ua.os.major) ?? "unknown"
+            device_brand = string(parsed_ua.device.brand) ?? "unknown"
+            device_model = string(parsed_ua.device.model) ?? "unknown"
+          }
+
+          response_body = encode_json(gateway.responseBody)
+          request_body = encode_json(gateway.requestBody)
+          request_headers_size = length(request_headers_text)
+
+          . = {
+            "timestamp": format_timestamp!(event_time, "%+"),
+            "createdtime": format_timestamp!(now(), "%+"),
+            "server_ip": "REPLACE_LOGICAL_GATEWAY_ID",
+            "domain": host,
+            "request_method": method,
+            "status": status,
+            "business_code": to_int(gateway.responseBody.code) ?? 0,
+            "top_path": top_path,
+            "path": path,
+            "query": query,
+            "protocol": protocol,
+            "referer": referer,
+            "upstreamhost": string(gateway.routeId) ?? "-",
+            "responsetime": response_time,
+            "upstreamtime": response_time,
+            "duration": response_time,
+            "request_length": length(request_body) + request_headers_size,
+            "response_length": length(response_body),
+            "client_ip": client_ip,
+            "client_latitude": client_latitude,
+            "client_longitude": client_longitude,
+            "remote_user": "-",
+            "remote_ip": remote_ip,
+            "xff": xff,
+            "client_city": client_city,
+            "client_region": client_region,
+            "client_country": client_country,
+            "http_user_agent": user_agent,
+            "client_browser_family": browser_family,
+            "client_browser_major": browser_major,
+            "client_os_family": os_family,
+            "client_os_major": os_major,
+            "client_device_brand": device_brand,
+            "client_device_model": device_model,
+            "trace_id": string(response_headers."trace-id") ?? "-",
+            "version": string(request_headers.Version) ?? string(request_headers.version) ?? "-",
+            "app_id": string(request_headers.appId) ?? string(request_headers.appid) ?? "-",
+            "platform_id": to_int(request_headers."platform-id") ?? to_int(request_headers.platform_id) ?? 0,
+            "tenant_id": to_int(request_headers."tenant-id") ?? to_int(request_headers.tenant_id) ?? 0,
+            "user_id": to_int(gateway.userId) ?? 0,
+            "user_type": to_int(gateway.userType) ?? 0
+          }
+      sanitize_parse_failures:
+        type: remap
+        inputs:
+        - parse_gateway_event.dropped
+        source: |
+          component_id = string(.metadata.dropped.component_id) ?? "unknown"
+          reason = string(.metadata.dropped.reason) ?? "unknown"
+          error_message = string(.metadata.dropped.message) ?? "unknown"
+          original_message_bytes = length(string(.message) ?? "")
+          . = {
+            "timestamp": now(),
+            "component_id": component_id,
+            "reason": reason,
+            "error_message": error_message,
+            "original_message_bytes": original_message_bytes
+          }
+      capture_automq_source_file:
+        type: remap
+        inputs:
+        - gateway_logs
+        source: |
+          %automq_source_file = string(.file) ?? "unknown"
+      prepare_automq_event:
+        type: remap
+        inputs:
+        - parse_gateway_event
+        source: |
+          ._automq_event_timestamp = string!(.timestamp)
+          ._automq_partition_key = string(%automq_source_file) ?? "unknown"
+      route_automq_gateway_size:
+        type: route
+        inputs:
+        - prepare_automq_event
+        route:
+          normal: length(encode_json(.)) <= 4000000
+          oversized: length(encode_json(.)) > 4000000
+    sinks:
+      automq:
+        type: kafka
+        inputs:
+        - route_automq_gateway_size.normal
+        bootstrap_servers: ${AUTOMQ_BOOTSTRAP_SERVERS}
+        topic: ${AUTOMQ_TOPIC}
+        key_field: _automq_partition_key
+        compression: zstd
+        encoding:
+          codec: json
+          timestamp_format: rfc3339
+        sasl:
+          enabled: true
+          mechanism: SCRAM-SHA-512
+          username: ${AUTOMQ_PRODUCER_USERNAME}
+          password: SECRET[automq_auth.password]
+        acknowledgements:
+          enabled: true
+        batch:
+          max_bytes: 1048576
+          max_events: 500
+          timeout_secs: 1
+        buffer:
+          type: disk
+          max_size: 2147483648
+          when_full: block
+        message_timeout_ms: 0
+        socket_timeout_ms: 60000
+        librdkafka_options:
+          acks: all
+          enable.idempotence: 'true'
+          max.in.flight.requests.per.connection: '5'
+          message.max.bytes: '4194304'
+          queue.buffering.max.kbytes: '262144'
+          linger.ms: '100'
+          metadata.max.age.ms: '60000'
+          metadata.recovery.strategy: rebootstrap
+          metadata.recovery.rebootstrap.trigger.ms: '30000'
+          topic.metadata.refresh.interval.ms: '30000'
+          topic.metadata.refresh.fast.interval.ms: '250'
+          topic.metadata.refresh.sparse: 'false'
+          reconnect.backoff.ms: '250'
+          reconnect.backoff.max.ms: '5000'
+          socket.keepalive.enable: 'true'
+      clickhouse_oversized_fallback:
+        type: clickhouse
+        inputs:
+        - route_automq_gateway_size.oversized
+        endpoint: http://clickhouse.example.internal:8123
+        database: gateway_logs
+        table: gateway_access
+        format: json_each_row
+        auth:
+          strategy: basic
+          user: SECRET[clickhouse_auth.username]
+          password: SECRET[clickhouse_auth.password]
+        compression: gzip
+        acknowledgements:
+          enabled: true
+        batch:
+          max_bytes: 1048576
+          max_events: 1000
+          timeout_secs: 5
+        buffer:
+          type: memory
+          max_events: 100
+          when_full: block
+        query_settings:
+          async_insert_settings:
+            enabled: true
+            wait_for_processing: true
+            wait_for_processing_timeout: 120
+        request:
+          timeout_secs: 180
+          retry_initial_backoff_secs: 1
+          retry_max_duration_secs: 30
+      parse_diagnostics:
+        type: console
+        inputs:
+        - sanitize_parse_failures
+        target: stderr
+        encoding:
+          codec: json
+      metrics:
+        type: prometheus_exporter
+        inputs:
+        - internal_metrics
+        address: 0.0.0.0:9599
+  producer-stall-check.sh: |
+    #!/bin/sh
+    set -eu
+
+    state_file=/tmp/automq-producer-last-queue
+    metrics_url="http://127.0.0.1:${AUTOMQ_METRICS_PORT}/metrics"
+    broker="${AUTOMQ_BOOTSTRAP_SERVERS%%,*}"
+
+    if ! nc -z -w 2 "${broker%:*}" "${broker##*:}" >/dev/null 2>&1; then
+      rm -f "${state_file}"
+      exit 0
+    fi
+
+    metrics="$(wget -qO- -T 5 "${metrics_url}")"
+    queued="$(printf '%s\n' "${metrics}" | awk '
+      /^vector_buffer_size_bytes\{/ && /component_type="kafka"/ {sum += $(NF-1)}
+      END {printf "%.0f", sum + 0}
+    ')"
+    sent="$(printf '%s\n' "${metrics}" | awk '
+      /^vector_component_sent_events_total\{/ && /component_type="kafka"/ {sum += $(NF-1)}
+      END {printf "%.0f", sum + 0}
+    ')"
+
+    previous="$(cat "${state_file}" 2>/dev/null || true)"
+    printf '%s\n' "${queued}" > "${state_file}"
+
+    if [ "${queued}" -lt "${AUTOMQ_STALL_BUFFER_THRESHOLD_BYTES}" ]; then
+      exit 0
+    fi
+    if [ -z "${previous}" ] || [ "${queued}" -lt "${previous}" ]; then
+      exit 0
+    fi
+
+    printf 'Kafka producer not draining: queued=%s previous=%s sent=%s\n' \
+      "${queued}" "${previous}" "${sent}" >&2
+    exit 1
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: vector-clickhouse-gateway
+  namespace: logging
+  labels:
+    app: vector-clickhouse-gateway
+spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: vector-clickhouse-gateway
+  template:
+    metadata:
+      labels:
+        app: vector-clickhouse-gateway
+      annotations:
+        logs.example.com/vector-config-sha256: 90af05fabfb0c357c996c1a627a61540ff748f951e7b6894ed842ec173c69dbd
+        logs.example.com/automq-mode: production
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
+      initContainers:
+      - name: geoip-fetcher
+        image: quay.io/curl/curl:8.8.0@sha256:461ac0190a806ff4b8cd18b4bb68216e200b77f0e19aa76060698081656e9cae
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        args:
+        - |
+          set -eu
+          install -d -m 0755 /var/lib/vector/geoip
+          target=/var/lib/vector/geoip/dbip-city-lite-2026-09.mmdb
+          expected=05a10861259c7966cb54d7181ef8c360de8c8829d182098c0e62a9b7d54cd50d
+          url=https://github.com/seaworld008/vvg-logs-system/releases/download/geoip-dbip-city-lite-2026-09/dbip-city-lite-2026-09.mmdb
+          if [ -f "$target" ] && echo "$expected  $target" | sha256sum -c - >/dev/null 2>&1; then
+            exit 0
+          fi
+          tmp=$(mktemp /var/lib/vector/geoip/.dbip-city-lite-2026-09.mmdb.XXXXXX)
+          trap 'rm -f "$tmp"' EXIT
+          curl -L --fail --retry 5 --retry-all-errors --connect-timeout 30 --max-time 900 -o "$tmp" "$url"
+          echo "$expected  $tmp" | sha256sum -c -
+          chmod 0444 "$tmp"
+          mv -f "$tmp" "$target"
+          trap - EXIT
+        volumeMounts:
+        - name: state
+          mountPath: /var/lib/vector
+      containers:
+      - name: vector
+        image: registry.example.com/observability/timberio/vector:0.58.0-alpine@sha256:732a0051fffd0a402c8a1030f3afc4fa1282cb8b7c992e328e67f0a7cf2e0e45
+        imagePullPolicy: IfNotPresent
+        args:
+        - --config
+        - /etc/vector/vector.yaml
+        env:
+        - name: VECTOR_LOG
+          value: info
+        - name: TZ
+          value: Asia/Shanghai
+        - name: AUTOMQ_BOOTSTRAP_SERVERS
+          value: automq.example.internal:9092
+        - name: AUTOMQ_TOPIC
+          value: gateway.access.v1
+        - name: AUTOMQ_PRODUCER_USERNAME
+          value: gateway-producer
+        - name: AUTOMQ_METRICS_PORT
+          value: '9599'
+        - name: AUTOMQ_STALL_BUFFER_THRESHOLD_BYTES
+          value: '1048576'
+        - name: VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION
+          value: 'true'
+        ports:
+        - name: api
+          containerPort: 8686
+        - name: automq-metrics
+          containerPort: 9599
+          hostPort: 9599
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '2'
+            memory: 1Gi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: api
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - /opt/automq-health/producer-stall-check.sh
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+        volumeMounts:
+        - name: config
+          mountPath: /etc/vector
+          readOnly: true
+        - name: state
+          mountPath: /var/lib/vector
+        - name: var-log-containers
+          mountPath: /var/log/containers
+          readOnly: true
+        - name: var-log-pods
+          mountPath: /var/log/pods
+          readOnly: true
+        - name: automq-auth
+          mountPath: /var/run/secrets/automq
+          readOnly: true
+        - name: config
+          mountPath: /opt/automq-health/producer-stall-check.sh
+          subPath: producer-stall-check.sh
+          readOnly: true
+        - name: clickhouse-auth
+          mountPath: /var/run/secrets/clickhouse
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: vector-clickhouse-gateway-config
+      - name: state
+        hostPath:
+          path: /var/lib/vector-clickhouse-gateway
+          type: DirectoryOrCreate
+      - name: var-log-containers
+        hostPath:
+          path: /var/log/containers
+          type: Directory
+      - name: var-log-pods
+        hostPath:
+          path: /var/log/pods
+          type: Directory
+      - name: automq-auth
+        secret:
+          secretName: automq-gateway-producer
+      - name: clickhouse-auth
+        secret:
+          secretName: automq-gateway-clickhouse-fallback
