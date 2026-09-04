@@ -113,6 +113,9 @@ validate_static() {
     "Log pipeline selection guide exists"
   require_file "docs/decisions/0003-service-oriented-log-deployment-layout.md" \
     "Service-oriented repository layout ADR exists"
+  require_literal ".github/workflows/validate.yml" \
+    'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1' \
+    "GitHub Actions checkout is pinned to the current Node.js 24 release"
   require_file "docs/images/vvg-dashboard-overview.png" "Sanitized dashboard overview exists"
   require_file "docs/images/vvg-message-filter-builder.png" "Sanitized message filter screenshot exists"
   require_file "docker-compose/mcp-victorialogs/README.md" \
