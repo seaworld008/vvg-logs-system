@@ -5,13 +5,44 @@ namespace="${VECTOR_NAMESPACE:-logging}"
 efk_root="${CCE_EFK_ROOT:-/data/cce-huaweiCloud-manager/efk}"
 timestamp="$(date +%Y%m%d%H%M%S)"
 
+resolve_source_manifest() {
+  local directory="$1"
+  local override="$2"
+  shift 2
+
+  if [[ -n "${override}" ]]; then
+    [[ "${override}" != */* ]] || {
+      printf 'Source manifest override must be a filename: %s\n' "${override}" >&2
+      return 1
+    }
+    [[ -f "${efk_root}/${directory}/${override}" ]] || {
+      printf 'Source manifest does not exist: %s/%s\n' \
+        "${efk_root}/${directory}" "${override}" >&2
+      return 1
+    }
+    printf '%s' "${override}"
+    return
+  fi
+
+  local candidate
+  for candidate in "$@"; do
+    if [[ -f "${efk_root}/${directory}/${candidate}" ]]; then
+      printf '%s' "${candidate}"
+      return
+    fi
+  done
+  printf 'No active source manifest found in %s/%s\n' \
+    "${efk_root}" "${directory}" >&2
+  return 1
+}
+
 backup_pipeline() {
   local directory="$1"
   local daemonset="$2"
   local configmap="$3"
   local selector="$4"
   local source_manifest="$5"
-  local backup_dir="${efk_root}/${directory}/backups/automq-pre-shadow-${timestamp}"
+  local backup_dir="${efk_root}/${directory}/backups/vector-pre-change-${timestamp}"
   local checkpoint_file="${backup_dir}/${daemonset}.checkpoints.sha256"
 
   umask 077
@@ -42,7 +73,14 @@ backup_pipeline() {
   printf 'Backup complete: %s\n' "${backup_dir}"
 }
 
+vvg_source_manifest="$(resolve_source_manifest vector-log \
+  "${VVG_SOURCE_MANIFEST:-}" \
+  vector-automq-production.yaml vector-k8s-containerd-cri.yaml)"
+gateway_source_manifest="$(resolve_source_manifest vector-gateway \
+  "${GATEWAY_SOURCE_MANIFEST:-}" \
+  vector-automq-production.yaml vector-k8s-with-new-fields.yaml)"
+
 backup_pipeline vector-log vector-log vector-log-config app=vector-log \
-  vector-k8s-containerd-cri.yaml
+  "${vvg_source_manifest}"
 backup_pipeline vector-gateway vector-agent vector-agent-config-v058 app=vector \
-  vector-k8s-with-new-fields.yaml
+  "${gateway_source_manifest}"

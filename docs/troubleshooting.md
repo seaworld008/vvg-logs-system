@@ -68,7 +68,7 @@ curl -fsSG 'http://VICTORIALOGS_HOST:9428/select/logsql/query' \
 - 是否使用 `rewrite_timestamp` 把旧日志改写成当前时间。
 - VictoriaLogs 写入错误、写入延迟和磁盘是否真的异常。
 
-推荐基线见 `k8s-deployment/vector-k8s-containerd-cri.yaml`。正常低频 Java 日志可能等待最多约 3 秒多行收束加 1 秒批次，不应出现分钟级积压。
+推荐基线见 `k8s-deployment/vector/vvg/direct-containerd.yaml`。正常低频 Java 日志可能等待最多约 3 秒多行收束加 1 秒批次，不应出现分钟级积压。
 
 ### Grafana 查询按钮持续转圈
 

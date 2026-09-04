@@ -60,10 +60,15 @@ AutoMQ bucket URI 不设置 `checksumAlgorithm`。部署前依次验证：
 ## 4. 备份与影子部署
 
 在 `/data/automq/backups/<timestamp>/` 保存 Compose、渲染配置、镜像清单和主机基线。
-在 CCE 管理节点的 `efk/vector-log/` 与 `efk/vector-gateway/` 各自保存真实源、
-`vector-automq-shadow.yaml`、`vector-automq-production.yaml`、ConfigMap、DaemonSet 和
-checkpoint 摘要。原配置进入各自 `backups/automq-pre-shadow-<timestamp>/`，并生成
-SHA-256。秘密备份保持 `0600`，目录 `0700`；临时候选目录不能成为正式运维入口。
+CCE备份脚本默认选择顶层当前存在的 AutoMQ或直写 production清单，也可通过
+`VVG_SOURCE_MANIFEST`、`GATEWAY_SOURCE_MANIFEST` 显式指定；备份目录使用
+`backups/vector-pre-change-<timestamp>/`。
+迁移期间在 CCE 管理节点的 `efk/vector-log/` 与 `efk/vector-gateway/` 暂存真实源、
+shadow/production候选、ConfigMap、DaemonSet和 checkpoint摘要。主切验收后，顶层只
+保留当前 `vector-automq-production.yaml`、README和 SHA清单；直写、shadow、候选与旧
+production副本移入各自 `archive/<timestamp>/`。归档目录保持 `0700`、文件保持 `0600`
+并生成 SHA-256；临时候选目录不能成为长期运维入口。Git仓库中的四条脱敏通用路线不
+随现场归档删除。
 
 创建 ClickHouse 影子表时先保存正式表 `SHOW CREATE`，然后使用同结构创建
 `nginx_access_automq_shadow` 并把 TTL 调整为 3 天。VVG 影子数据写入 tenant `99:99`。

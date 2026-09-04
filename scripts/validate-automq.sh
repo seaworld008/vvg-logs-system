@@ -48,7 +48,10 @@ validate_static() {
       "docs/decisions/0002-automq-object-storage-log-buffer.md" \
       "docs/images/automq-dashboard-overview.png" \
       "scripts/render-automq-vector-manifest.py" \
+      "scripts/render-automq-example-manifests.py" \
       "scripts/render-automq-nightingale-dashboard.mjs" \
+      "k8s-deployment/vector/vvg/automq-containerd-production.yaml" \
+      "k8s-deployment/vector/gateway/automq-containerd-production.yaml" \
       "scripts/requirements-automq.txt"; do
     require_file "${file}" "AutoMQ deliverable exists: ${file}"
   done
@@ -191,6 +194,10 @@ PY
     "CCE backup stays with the Gateway Vector source directory"
   require_literal "${root}/scripts/backup-cce-vector.sh" 'checkpoint_file="${backup_dir}/${daemonset}.checkpoints.sha256"' \
     "CCE backup records checkpoint file hashes"
+  require_literal "${root}/scripts/backup-cce-vector.sh" 'vector-automq-production.yaml vector-k8s-containerd-cri.yaml' \
+    "CCE VVG backup supports AutoMQ and direct active manifests"
+  require_literal "${root}/scripts/backup-cce-vector.sh" 'vector-automq-production.yaml vector-k8s-with-new-fields.yaml' \
+    "CCE Gateway backup supports AutoMQ and direct active manifests"
   require_literal "${bootstrap}" '--operation IdempotentWrite' \
     "Kafka producers receive only the required idempotent-write cluster permission"
   require_literal "${vvg}" 'commit_interval_ms: 1000' \
@@ -333,6 +340,11 @@ PY
     "Gateway producer discovers the live structured ClickHouse input"
   forbid_regex "scripts/render-automq-vector-manifest.py" 'requestHeaders|responseHeaders|requestBody|responseBody' \
     "Gateway producer renderer does not copy raw payload fields"
+  if python3 scripts/render-automq-example-manifests.py --check; then
+    pass "Committed AutoMQ production manifests match their direct source manifests"
+  else
+    fail "Committed AutoMQ production manifests must be freshly rendered"
+  fi
 }
 
 validate_vector() {
@@ -388,9 +400,9 @@ validate_runtime() {
   trap 'rm -rf -- "${temp_dir}"' RETURN
   for pipeline in vvg gateway; do
     if [[ "${pipeline}" == vvg ]]; then
-      source_manifest="k8s-deployment/vector-k8s-containerd-cri.yaml"
+      source_manifest="k8s-deployment/vector/vvg/direct-containerd.yaml"
     else
-      source_manifest="clickhouse-gateway/vector/vector-k8s-containerd.yaml"
+      source_manifest="k8s-deployment/vector/gateway/direct-containerd.yaml"
     fi
     for rollout_mode in shadow production; do
       rendered="${temp_dir}/${pipeline}-${rollout_mode}.yaml"
@@ -403,10 +415,13 @@ import re, sys, yaml
 path, pipeline, mode = sys.argv[1:]
 raw = open(path, encoding="utf-8").read()
 docs = [d for d in yaml.safe_load_all(raw) if d]
-assert [d.get("kind") for d in docs] == ["ConfigMap", "DaemonSet"]
-assert "producer-stall-check.sh" in docs[0]["data"]
-cfg = yaml.safe_load(docs[0]["data"]["vector.yaml"])
-ds = docs[1]
+configmaps = [d for d in docs if d.get("kind") == "ConfigMap" and "vector.yaml" in d.get("data", {})]
+daemonsets = [d for d in docs if d.get("kind") == "DaemonSet"]
+assert len(configmaps) == 1
+assert len(daemonsets) == 1
+assert "producer-stall-check.sh" in configmaps[0]["data"]
+cfg = yaml.safe_load(configmaps[0]["data"]["vector.yaml"])
+ds = daemonsets[0]
 vector = ds["spec"]["template"]["spec"]["containers"][0]
 kafka_sinks = [sink for sink in cfg["sinks"].values() if sink.get("type") == "kafka"]
 assert all(sink["buffer"]["when_full"] == "block" for sink in kafka_sinks)
@@ -414,7 +429,7 @@ assert all(sink["acknowledgements"]["enabled"] is True for sink in kafka_sinks)
 assert all(sink["compression"] == "zstd" for sink in kafka_sinks)
 assert not re.search(r'^\s+source:\s+"[^"\n]*\\n', raw, re.MULTILINE)
 assert ds["spec"]["template"]["spec"]["terminationGracePeriodSeconds"] == 120
-assert len(ds["spec"]["template"]["metadata"]["annotations"]["vvg.jinlingkeji.cn/vector-config-sha256"]) == 64
+assert len(ds["spec"]["template"]["metadata"]["annotations"]["logs.example.com/vector-config-sha256"]) == 64
 assert "automq-auth" in {v["name"] for v in ds["spec"]["template"]["spec"]["volumes"]}
 assert vector["livenessProbe"]["failureThreshold"] == 3
 assert vector["livenessProbe"]["periodSeconds"] == 30
@@ -430,6 +445,9 @@ if mode == "shadow":
         if source.get("type") in {"file", "kubernetes_logs"}
     )
 if pipeline == "vvg":
+    assert {"ServiceAccount", "ClusterRole", "ClusterRoleBinding"}.issubset(
+        {doc.get("kind") for doc in docs}
+    )
     assert "victorialogs_oversized" in cfg["sinks"]
     assert len(kafka_sinks) == 2
     assert sum(sink["buffer"]["max_size"] for sink in kafka_sinks) == 10737418240

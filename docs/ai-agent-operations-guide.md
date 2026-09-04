@@ -19,9 +19,10 @@
 
 | 任务 | 首要文件 |
 | --- | --- |
-| Gateway 日志写入 ClickHouse | `clickhouse-gateway/README.md`、`docs/vector-clickhouse-gateway-runbook.md` |
-| KubeDoor Gateway Dashboard / GeoIP | `scripts/sanitize-clickhouse-gateway-dashboard.mjs`、`clickhouse-gateway/vector/geoip/NOTICE.md` |
+| Gateway 日志写入 ClickHouse | `k8s-deployment/vector/gateway/README.md`、`docker-compose/clickhouse/README.md`、`docs/vector-clickhouse-gateway-runbook.md` |
+| KubeDoor Gateway Dashboard / GeoIP | `scripts/sanitize-clickhouse-gateway-dashboard.mjs`、`docker-compose/grafana/routes/gateway-clickhouse/`、`k8s-deployment/vector/gateway/geoip/NOTICE.md` |
 | VVG/Gateway 持久缓冲 | `docker-compose/automq/README.md`、`docs/automq-log-buffer-runbook.md` |
+| 四条链路选型与完整 K8S YAML | `docs/log-pipeline-selection.md` |
 
 ## 2. 先判断任务边界
 

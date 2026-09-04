@@ -22,11 +22,35 @@ read_env() {
   printf '%s' "${value}"
 }
 
+read_env_optional() {
+  local key="$1"
+  local value
+  value="$(sed -n "s/^${key}=//p" "${env_file}" | tail -n 1)"
+  value="${value%$'\r'}"
+  printf '%s' "${value}"
+}
+
 GRAFANA_IMAGE="$(read_env GRAFANA_IMAGE)"
 VICTORIALOGS_PLUGIN_VERSION="$(read_env VICTORIALOGS_PLUGIN_VERSION)"
 BUSINESS_TEXT_PLUGIN_VERSION="$(read_env BUSINESS_TEXT_PLUGIN_VERSION)"
+GRAFANA_EXTRA_PLUGINS="$(read_env_optional GRAFANA_EXTRA_PLUGINS)"
 configured_target="$(read_env GRAFANA_PLUGINS_DIR)"
 target_dir="${target_override:-${configured_target}}"
+
+extra_plugins=()
+if [[ -n "${GRAFANA_EXTRA_PLUGINS}" ]]; then
+  IFS=',' read -r -a extra_plugins <<<"${GRAFANA_EXTRA_PLUGINS}"
+  for plugin_spec in "${extra_plugins[@]}"; do
+    [[ "${plugin_spec}" =~ ^[a-z0-9_-]+@[0-9][A-Za-z0-9._-]*$ ]] || {
+      printf 'Invalid GRAFANA_EXTRA_PLUGINS entry: %s\n' "${plugin_spec}" >&2
+      exit 1
+    }
+    [[ "${plugin_spec}" == "grafana-clickhouse-datasource@4.5.1" ]] || {
+      printf 'Unsupported extra Grafana plugin: %s\n' "${plugin_spec}" >&2
+      exit 1
+    }
+  done
+fi
 
 case "${target_dir}" in
   /*/plugins/releases/*) ;;
@@ -66,6 +90,16 @@ validate_plugins() {
       printf 'Business Text plugin version mismatch in %s\n' "${directory}" >&2
       exit 1
     }
+  for plugin_spec in "${extra_plugins[@]}"; do
+    plugin_id="${plugin_spec%@*}"
+    plugin_version="${plugin_spec##*@}"
+    grep -Fq "${plugin_id} @ ${plugin_version}" <<<"${output}" || {
+      printf '%s\n' "${output}" >&2
+      printf 'Extra plugin version mismatch in %s: %s\n' \
+        "${directory}" "${plugin_spec}" >&2
+      exit 1
+    }
+  done
   printf '%s\n' "${output}"
 }
 
@@ -110,12 +144,27 @@ docker run --rm \
   cli --pluginsDir /var/lib/grafana-plugins \
   plugins install marcusolsson-dynamictext-panel "${BUSINESS_TEXT_PLUGIN_VERSION}"
 
+for plugin_spec in "${extra_plugins[@]}"; do
+  plugin_id="${plugin_spec%@*}"
+  plugin_version="${plugin_spec##*@}"
+  docker run --rm \
+    --user "${installer_uid}:${installer_gid}" \
+    -v "${stage_dir}:/var/lib/grafana-plugins" \
+    --entrypoint grafana \
+    "${GRAFANA_IMAGE}" \
+    cli --pluginsDir /var/lib/grafana-plugins \
+    plugins install "${plugin_id}" "${plugin_version}"
+done
+
 validate_plugins "${stage_dir}" >/dev/null
 printf 'grafana_image=%s\nvictorialogs_plugin=%s\nbusiness_text_plugin=%s\n' \
   "${GRAFANA_IMAGE}" \
   "${VICTORIALOGS_PLUGIN_VERSION}" \
   "${BUSINESS_TEXT_PLUGIN_VERSION}" \
   > "${stage_dir}/BUNDLE-MANIFEST"
+for plugin_spec in "${extra_plugins[@]}"; do
+  printf 'extra_plugin=%s\n' "${plugin_spec}" >> "${stage_dir}/BUNDLE-MANIFEST"
+done
 (
   cd "${stage_dir}"
   find . -type f ! -name SHA256SUMS -print0 \

@@ -86,6 +86,17 @@ docker compose --env-file .env --profile production up -d \
 
 ## Vector producer 清单
 
+仓库已提交两份由当前公开基线生成的完整 production清单：
+
+```text
+k8s-deployment/vector/vvg/automq-containerd-production.yaml
+k8s-deployment/vector/gateway/automq-containerd-production.yaml
+```
+
+新部署可按[日志链路选型与 Kubernetes 快速启用指南](../../docs/log-pipeline-selection.md)
+替换占位符并创建 Secret。已有生产环境若包含自定义 selector、解析、GeoIP或字段，仍
+必须从现场真实源 manifest重新生成候选，不能用公开示例覆盖。
+
 不要手改线上嵌入式 `vector.yaml`。从真实部署源文件渲染：
 
 ```bash
@@ -107,19 +118,29 @@ producer 同时保留官方 `rebootstrap`/完整 metadata 刷新和有条件 liv
 可靠进入 producer disk buffer 后开始，不能把它扩大为容器日志文件到存储端的绝对
 端到端保证。
 
-CCE 管理节点上的正式源、新清单和备份必须按链路归档，不能只留在临时目录：
+公开 production清单的统一生成与防漂移检查：
+
+```bash
+python3 scripts/render-automq-example-manifests.py
+python3 scripts/render-automq-example-manifests.py --check
+```
+
+CCE 管理节点顶层只保留当前 production清单和校验文件；直写、shadow、候选与旧
+production现场副本进入权限受限且带 SHA-256 的归档。Git仓库仍长期保留全部通用路线：
 
 ```text
 efk/vector-log/
-  vector-k8s-containerd-cri.yaml
-  vector-automq-shadow.yaml
   vector-automq-production.yaml
-  backups/automq-pre-shadow-<timestamp>/
+  SHA256SUMS-automq
+  archive/<timestamp>/
+    vector-k8s-containerd-cri.yaml
+    vector-automq-shadow.yaml
 efk/vector-gateway/
-  vector-k8s-with-new-fields.yaml
-  vector-automq-shadow.yaml
   vector-automq-production.yaml
-  backups/automq-pre-shadow-<timestamp>/
+  SHA256SUMS-automq
+  archive/<timestamp>/
+    vector-k8s-with-new-fields.yaml
+    vector-automq-shadow.yaml
 ```
 
 ## 验证

@@ -18,16 +18,20 @@ MCP Client -> mcp-victorialogs -> vmauth -> VictoriaLogs
 
 ## 日志链路选型
 
-仓库同时长期保留两种生产方案，不因引入 AutoMQ 删除直写配置：
+仓库同时长期保留直写与 AutoMQ 缓冲方案，不因生产只启用其中一条而删除其他配置：
 
-| 场景 | 推荐链路 | 取舍 |
+| 日志 | 小到中等规模 | 中大规模或需要集中缓冲 |
 |---|---|---|
-| 小到中等规模、下游稳定、优先降低运维复杂度 | Vector 直写 VictoriaLogs 或 ClickHouse | 组件少、延迟低；下游故障时主要依赖节点 disk buffer |
-| 中大规模、高峰明显、需要 72 小时集中缓冲或隔离存储抖动 | Vector -> AutoMQ + S3 -> Vector consumer -> VictoriaLogs/ClickHouse | 可独立追赶和重放；增加 Broker、对象存储、consumer group 与监控运维 |
+| VVG | [Vector 直写 VictoriaLogs](k8s-deployment/vector/vvg/direct-containerd.yaml) | [Vector 写 AutoMQ](k8s-deployment/vector/vvg/automq-containerd-production.yaml) -> consumer -> VictoriaLogs |
+| Gateway | [Vector 直写 ClickHouse](k8s-deployment/vector/gateway/direct-containerd.yaml) | [Vector 写 AutoMQ](k8s-deployment/vector/gateway/automq-containerd-production.yaml) -> consumer -> ClickHouse |
 
-VVG 直写基线位于 `k8s-deployment/vector-k8s-containerd-cri.yaml`，Gateway 直写基线位于
-`clickhouse-gateway/vector/vector-k8s-containerd.yaml`。它们既是较小规模环境的推荐配置，
+VVG 直写基线位于 `k8s-deployment/vector/vvg/direct-containerd.yaml`，Gateway 直写基线位于
+`k8s-deployment/vector/gateway/direct-containerd.yaml`。它们既是较小规模环境的推荐配置，
 也是 AutoMQ 主链路的第一回滚入口，必须与缓冲层方案一起维护和验证。
+
+完整替换项、Secret、部署、切换和回滚命令见
+[日志链路选型与 Kubernetes 快速启用指南](docs/log-pipeline-selection.md)。仓库保留全部
+通用方案；生产管理服务器顶层只保留当前启用清单，旧现场文件带 SHA-256归档。
 
 ![AutoMQ 原生夜莺大屏脱敏预览](docs/images/automq-dashboard-overview.png)
 
@@ -43,6 +47,7 @@ VVG 直写基线位于 `k8s-deployment/vector-k8s-containerd-cri.yaml`，Gateway
 - [AI Agent 配置、升级与验收指南](docs/ai-agent-operations-guide.md)
 - [VictoriaLogs MCP 部署说明](docker-compose/mcp-victorialogs/README.md)
 - [AutoMQ + 对象存储日志缓冲层](docker-compose/automq/README.md)
+- [日志链路选型与 Kubernetes 快速启用指南](docs/log-pipeline-selection.md)
 
 ## VVG 核心架构
 
@@ -181,22 +186,24 @@ docker-compose up -d
 在 Kubernetes 环境中部署 Vector 进行日志收集:
 
 ```bash
-# 1. 修改 VictoriaLogs 地址
+# 1. 选择日志和链路，再修改示例地址与私库镜像
 cd k8s-deployment
-# 编辑配置文件，设置 VictoriaLogs 服务器地址
 
 # 2. 根据容器运行时选择配置文件
 # Docker CRI
-kubectl apply -f vector-k8s-docker-cri.yaml
+kubectl apply -f vector/vvg/direct-docker.yaml
 
 # Containerd CRI  
-kubectl apply -f vector-k8s-containerd-cri.yaml
+kubectl apply -f vector/vvg/direct-containerd.yaml
 
 # 3. 验证部署
 kubectl get pods -n logging
 ```
 
 详细说明: [Kubernetes 部署文档](k8s-deployment/README.md)
+
+VVG/Gateway 的 direct 与 AutoMQ 四条完整路线见
+[日志链路选型与 Kubernetes 快速启用指南](docs/log-pipeline-selection.md)。
 
 ### 验证部署
 
@@ -244,9 +251,11 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 ```
 ├── docker-compose/
 │   ├── victorialogs/               # VictoriaLogs 存储
+│   ├── clickhouse/                  # ClickHouse 服务、TTL 和 Gateway schema
 │   ├── grafana/
 │   │   ├── dashboards/             # 生产 Dashboard JSON
 │   │   ├── datasources/            # datasource provisioning
+│   │   ├── routes/                  # 可选 Gateway ClickHouse 配置
 │   │   ├── panel-templates/        # 生成的 Business Text 面板模板
 │   │   ├── docker-compose.yml
 │   │   ├── env.example
@@ -254,18 +263,19 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 │   ├── mcp-victorialogs/           # 官方 MCP + vmauth 查询保护
 │   ├── automq/                      # AutoMQ + OBS 持久缓冲、消费者与监控
 │   └── vector/                     # Docker Vector
-├── k8s-deployment/                 # Docker CRI / Containerd CRI Vector
-├── clickhouse-gateway/             # 附加方案：Gateway -> Vector -> ClickHouse -> Grafana
-│   ├── clickhouse/                 # 单文件 Compose、TTL 和表结构
-│   ├── vector/                     # containerd Vector DaemonSet
-│   └── grafana/                    # datasource 与 Dashboard
+├── k8s-deployment/
+│   └── vector/
+│       ├── vvg/                    # VVG direct / AutoMQ 完整清单
+│       └── gateway/                # Gateway direct / AutoMQ 完整清单
 ├── scripts/
 │   ├── install-grafana-plugins.sh  # 原子发布外置插件 release
+│   ├── render-automq-example-manifests.py
 │   ├── render-vvg-message-filter.mjs
 │   ├── validate-vvg-message-filter.mjs
 │   └── validate-configs.sh
 ├── docs/
 │   ├── images/                     # 脱敏界面截图
+│   ├── log-pipeline-selection.md   # 四条日志链路选型和快速启用入口
 │   └── ai-agent-operations-guide.md
 ├── AGENTS.md                       # AI Agent 全仓库约束
 ├── .github/workflows/              # PR/main 自动校验
@@ -302,7 +312,7 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 - 编辑 `docker-compose/vector/vector.yaml`
 
 **Kubernetes 部署**:
-- 编辑 `k8s-deployment/vector-k8s-*.yaml` 中的 ConfigMap
+- 编辑 `k8s-deployment/vector/<日志类型>/` 中对应 direct源清单，再重新生成 AutoMQ清单
 
 支持的自定义内容:
 - 添加新的日志源
@@ -349,7 +359,11 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 
 ## 附加方案：Gateway 结构化日志分析
 
-`clickhouse-gateway/` 是独立的 Gateway 访问日志方案，提供单文件 ClickHouse Compose、Kubernetes Vector、月分区表结构、Grafana datasource、DB-IP GeoIP 和完整 65 面板 KubeDoor Gateway Dashboard。当前附加方案基线为 ClickHouse `26.8.2.7-alpine` 和 Grafana ClickHouse datasource `4.5.1`。
+Gateway访问日志仍是独立的数据链路，但部署文件按服务归位：ClickHouse位于
+`docker-compose/clickhouse/`，Kubernetes Vector位于
+`k8s-deployment/vector/gateway/`，Grafana可选配置位于
+`docker-compose/grafana/routes/gateway-clickhouse/`。当前基线为 ClickHouse
+`26.8.2.7-alpine` 和 Grafana ClickHouse datasource `4.5.1`。
 
 该模板不会携带现场地址或凭据，并通过 CI 阻止有限重试、无界 system log、非持久 buffer、`latest`、华为云下载链接和真实环境标识回流仓库。
 
@@ -362,9 +376,12 @@ Gateway stdout -> Vector 0.58 -> ClickHouse 26.8 LTS -> Grafana
 
 附加方案文档：
 
-- [Vector -> ClickHouse -> Grafana 部署专区](clickhouse-gateway/README.md)
+- [ClickHouse 服务部署](docker-compose/clickhouse/README.md)
+- [Gateway Vector direct / AutoMQ 配置](k8s-deployment/vector/gateway/README.md)
+- [Grafana Gateway ClickHouse 可选路线](docker-compose/grafana/routes/gateway-clickhouse/README.md)
 - [生产盘点、升级、隔离验证和回滚手册](docs/vector-clickhouse-gateway-runbook.md)
 - [架构决策 ADR-001](docs/decisions/0001-vector-clickhouse-gateway.md)
+- [仓库结构 ADR-003](docs/decisions/0003-service-oriented-log-deployment-layout.md)
 
 以下截图来自生产案例的脱敏只读视图，域名、项目名和地址均已替换为示例值：
 

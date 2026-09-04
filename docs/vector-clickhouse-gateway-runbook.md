@@ -6,6 +6,12 @@
 
 本手册供 AI Agent 和运维人员执行新部署、升级、故障定位和回滚。真实地址、密码、镜像仓库、集群清单和业务日志正文不得进入 Git、PR、Release 或截图。
 
+仓库按服务归位：ClickHouse Compose在 `docker-compose/clickhouse/`，Gateway direct与
+AutoMQ Vector清单在 `k8s-deployment/vector/gateway/`，Grafana可选配置在
+`docker-compose/grafana/routes/gateway-clickhouse/`。统一选型入口见
+`docs/log-pipeline-selection.md`；不存在第二套 Grafana或独立 `clickhouse-gateway/`
+服务目录。
+
 ## 1. 先确认边界和所有权
 
 ```bash

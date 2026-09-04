@@ -134,7 +134,7 @@ curl -fsSG 'http://VICTORIALOGS_HOST:9428/select/logsql/query' \
 
 ## 4. 推荐配置
 
-仓库中的 `k8s-deployment/vector-k8s-containerd-cri.yaml` 与 Docker CRI 模板已经包含以下基线：
+仓库中的 `k8s-deployment/vector/vvg/direct-containerd.yaml` 与 Docker CRI模板已经包含以下基线：
 
 | 配置 | 推荐值 | 原因 |
 |---|---:|---|
@@ -222,7 +222,7 @@ curl -fsS http://VICTORIALOGS_HOST:9428/metrics \
 
 ```bash
 kubectl apply --dry-run=server \
-  -f k8s-deployment/vector-k8s-containerd-cri.yaml
+  -f k8s-deployment/vector/vvg/direct-containerd.yaml
 
 docker run --rm \
   -e VECTOR_SELF_NODE_NAME=validation-node \
@@ -240,7 +240,7 @@ docker run --rm \
 ### 7.3 滚动 Vector
 
 ```bash
-kubectl apply -f k8s-deployment/vector-k8s-containerd-cri.yaml
+kubectl apply -f k8s-deployment/vector/vvg/direct-containerd.yaml
 kubectl -n logging rollout status daemonset/vector --timeout=300s
 kubectl -n logging get pods -l app=vector -o wide
 ```

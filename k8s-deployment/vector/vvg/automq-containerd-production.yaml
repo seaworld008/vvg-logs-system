@@ -1,0 +1,475 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-config
+  namespace: logging
+data:
+  vector.yaml: |
+    data_dir: /var/lib/vector
+    api:
+      enabled: true
+      address: 0.0.0.0:8686
+    sources:
+      k8s_logs:
+        type: kubernetes_logs
+        auto_partial_merge: true
+        self_node_name: ${VECTOR_SELF_NODE_NAME}
+        insert_namespace_fields: false
+        glob_minimum_cooldown_ms: 5000
+        oldest_first: false
+        max_read_bytes: 65536
+        rotate_wait_secs: 300
+        delay_deletion_ms: 300000
+        extra_label_selector: app!=fluentd,app!=vector,app!=vector-log
+        extra_field_selector: metadata.namespace!=kube-system,metadata.namespace!=monitoring,metadata.namespace!=logging
+        exclude_paths_glob_patterns:
+        - '**/*.gz'
+        - '**/*.tmp'
+        - /var/log/pods/kube-system_*/*/*.log
+        - /var/log/pods/monitoring_*/*/*.log
+        - /var/log/pods/logging_*/*/*.log
+        - /var/log/pods/*/init-*/**
+        - /var/log/pods/*/wait-for-*/**
+        - /var/log/pods/*/sidecar/*.log
+        - /var/log/pods/*/istio-proxy/*.log
+      internal_metrics:
+        type: internal_metrics
+    transforms:
+      filter_java_logs:
+        type: filter
+        inputs:
+        - k8s_logs
+        condition: |
+          message = string(.message) ?? ""
+          container_name = string(.kubernetes.container_name) ?? ""
+          !contains(message, "/actuator/health") &&
+          !contains(message, "/health") &&
+          container_name != "sidecar" &&
+          container_name != "istio-proxy"
+      enhance_multiline:
+        type: reduce
+        inputs:
+        - filter_java_logs
+        group_by:
+        - kubernetes.pod_name
+        - kubernetes.container_name
+        starts_when: |
+          match(string(.message) ?? "", r'^(\d{4}-\d{2}-\d{2}(?:T|\s)\d{2}:\d{2}:\d{2}|\b(INFO|WARN|DEBUG|ERROR|FATAL|TRACE)\b)')
+        expire_after_ms: 3000
+        merge_strategies:
+          message: concat_newline
+      add_msg_field:
+        type: remap
+        inputs:
+        - enhance_multiline
+        source: |
+          msg, err = string(.message)
+          if err != null { msg = "" }
+          msg = replace(msg, "\0", "")
+          .message = msg
+          ._msg = msg
+
+          caps, perr = parse_regex(msg, r'^\d{4}-\d{2}-\d{2}(?:T|\s)\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+(?P<lvl>TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\b')
+          if perr == null && caps != null {
+            .level = downcase(to_string(caps.lvl))
+          } else {
+            .level = "unknown"
+          }
+      prepare_automq_event:
+        type: remap
+        inputs:
+        - add_msg_field
+        source: |
+          ._automq_event_timestamp = format_timestamp!(.timestamp, "%+")
+          namespace = string(.kubernetes.pod_namespace) ?? "unknown"
+          pod = string(.kubernetes.pod_name) ?? "unknown"
+          container = string(.kubernetes.container_name) ?? "unknown"
+          ._automq_partition_key = namespace + "/" + pod + "/" + container
+      route_automq_message_size:
+        type: route
+        inputs:
+        - prepare_automq_event
+        route:
+          normal: length(encode_json(.)) <= 4000000
+          oversized: length(encode_json(.)) > 4000000 && length(encode_json(.)) <= 16000000
+          extreme: length(encode_json(.)) > 16000000
+      truncate_extreme_vvg_event:
+        type: remap
+        inputs:
+        - route_automq_message_size.extreme
+        source: |
+          original_size = length(encode_json(.))
+          original_message = string(.message) ?? ""
+          message_chunks = chunks(original_message, 2000000)
+          truncated_message = string(message_chunks[0]) ?? ""
+          event_timestamp = .timestamp
+          level = string(.level) ?? "unknown"
+          namespace = string(.kubernetes.pod_namespace) ?? "unknown"
+          pod = string(.kubernetes.pod_name) ?? "unknown"
+          container = string(.kubernetes.container_name) ?? "unknown"
+          . = {
+            "timestamp": event_timestamp,
+            "message": truncated_message,
+            "_msg": truncated_message,
+            "level": level,
+            "kubernetes": {
+              "pod_namespace": namespace,
+              "pod_name": pod,
+              "container_name": container
+            },
+            "_automq_oversized": true,
+            "_automq_original_size_bytes": original_size,
+            "_automq_original_message_sha256": sha2(original_message)
+          }
+      route_automq_producer_lane:
+        type: route
+        inputs:
+        - route_automq_message_size.normal
+        route:
+          lane_a: mod((to_int(xxhash(string!(._automq_partition_key), "XXH32")) ?? 0),
+            2) == 0
+          lane_b: mod((to_int(xxhash(string!(._automq_partition_key), "XXH32")) ?? 0),
+            2) != 0
+    sinks:
+      automq_lane_a:
+        type: kafka
+        inputs:
+        - route_automq_producer_lane.lane_a
+        bootstrap_servers: ${AUTOMQ_BOOTSTRAP_SERVERS}
+        topic: ${AUTOMQ_TOPIC}
+        key_field: _automq_partition_key
+        compression: zstd
+        encoding:
+          codec: json
+          timestamp_format: rfc3339
+        sasl:
+          enabled: true
+          mechanism: SCRAM-SHA-512
+          username: ${AUTOMQ_PRODUCER_USERNAME}
+          password: SECRET[automq_auth.password]
+        acknowledgements:
+          enabled: true
+        batch:
+          max_bytes: 1048576
+          max_events: 500
+          timeout_secs: 1
+        buffer:
+          type: disk
+          max_size: 5368709120
+          when_full: block
+        message_timeout_ms: 0
+        socket_timeout_ms: 60000
+        librdkafka_options:
+          acks: all
+          enable.idempotence: 'true'
+          max.in.flight.requests.per.connection: '5'
+          message.max.bytes: '4194304'
+          queue.buffering.max.kbytes: '262144'
+          linger.ms: '100'
+          metadata.max.age.ms: '60000'
+          metadata.recovery.strategy: rebootstrap
+          metadata.recovery.rebootstrap.trigger.ms: '30000'
+          topic.metadata.refresh.interval.ms: '30000'
+          topic.metadata.refresh.fast.interval.ms: '250'
+          topic.metadata.refresh.sparse: 'false'
+          reconnect.backoff.ms: '250'
+          reconnect.backoff.max.ms: '5000'
+          socket.keepalive.enable: 'true'
+      automq_lane_b:
+        type: kafka
+        inputs:
+        - route_automq_producer_lane.lane_b
+        bootstrap_servers: ${AUTOMQ_BOOTSTRAP_SERVERS}
+        topic: ${AUTOMQ_TOPIC}
+        key_field: _automq_partition_key
+        compression: zstd
+        encoding:
+          codec: json
+          timestamp_format: rfc3339
+        sasl:
+          enabled: true
+          mechanism: SCRAM-SHA-512
+          username: ${AUTOMQ_PRODUCER_USERNAME}
+          password: SECRET[automq_auth.password]
+        acknowledgements:
+          enabled: true
+        batch:
+          max_bytes: 1048576
+          max_events: 500
+          timeout_secs: 1
+        buffer:
+          type: disk
+          max_size: 5368709120
+          when_full: block
+        message_timeout_ms: 0
+        socket_timeout_ms: 60000
+        librdkafka_options:
+          acks: all
+          enable.idempotence: 'true'
+          max.in.flight.requests.per.connection: '5'
+          message.max.bytes: '4194304'
+          queue.buffering.max.kbytes: '262144'
+          linger.ms: '100'
+          metadata.max.age.ms: '60000'
+          metadata.recovery.strategy: rebootstrap
+          metadata.recovery.rebootstrap.trigger.ms: '30000'
+          topic.metadata.refresh.interval.ms: '30000'
+          topic.metadata.refresh.fast.interval.ms: '250'
+          topic.metadata.refresh.sparse: 'false'
+          reconnect.backoff.ms: '250'
+          reconnect.backoff.max.ms: '5000'
+          socket.keepalive.enable: 'true'
+      victorialogs_oversized:
+        type: loki
+        inputs:
+        - route_automq_message_size.oversized
+        - truncate_extreme_vvg_event
+        endpoint: ${VLS_ENDPOINT}
+        path: /insert/loki/api/v1/push
+        out_of_order_action: accept
+        labels:
+          job: java-app
+          namespace: '{{ kubernetes.pod_namespace }}'
+          pod: '{{ kubernetes.pod_name }}'
+          container: '{{ kubernetes.container_name }}'
+          level: '{{ level }}'
+        encoding:
+          codec: json
+        batch:
+          max_bytes: 1048576
+          max_events: 500
+          timeout_secs: 1
+        buffer:
+          type: disk
+          max_size: 1073741824
+          when_full: block
+        compression: none
+        healthcheck: false
+        request:
+          timeout_secs: 60
+        tenant_id: ${VLS_TENANT_ID}
+        acknowledgements:
+          enabled: true
+      metrics:
+        type: prometheus_exporter
+        inputs:
+        - internal_metrics
+        address: 0.0.0.0:9598
+    secret:
+      automq_auth:
+        type: directory
+        path: /var/run/secrets/automq
+  producer-stall-check.sh: |
+    #!/bin/sh
+    set -eu
+
+    state_file=/tmp/automq-producer-last-queue
+    metrics_url="http://127.0.0.1:${AUTOMQ_METRICS_PORT}/metrics"
+    broker="${AUTOMQ_BOOTSTRAP_SERVERS%%,*}"
+
+    if ! nc -z -w 2 "${broker%:*}" "${broker##*:}" >/dev/null 2>&1; then
+      rm -f "${state_file}"
+      exit 0
+    fi
+
+    metrics="$(wget -qO- -T 5 "${metrics_url}")"
+    queued="$(printf '%s\n' "${metrics}" | awk '
+      /^vector_buffer_size_bytes\{/ && /component_type="kafka"/ {sum += $(NF-1)}
+      END {printf "%.0f", sum + 0}
+    ')"
+    sent="$(printf '%s\n' "${metrics}" | awk '
+      /^vector_component_sent_events_total\{/ && /component_type="kafka"/ {sum += $(NF-1)}
+      END {printf "%.0f", sum + 0}
+    ')"
+
+    previous="$(cat "${state_file}" 2>/dev/null || true)"
+    printf '%s\n' "${queued}" > "${state_file}"
+
+    if [ "${queued}" -lt "${AUTOMQ_STALL_BUFFER_THRESHOLD_BYTES}" ]; then
+      exit 0
+    fi
+    if [ -z "${previous}" ] || [ "${queued}" -lt "${previous}" ]; then
+      exit 0
+    fi
+
+    printf 'Kafka producer not draining: queued=%s previous=%s sent=%s\n' \
+      "${queued}" "${previous}" "${sent}" >&2
+    exit 1
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vector
+  namespace: logging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vector
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - namespaces
+  - nodes
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vector
+subjects:
+- kind: ServiceAccount
+  name: vector
+  namespace: logging
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: vector
+  namespace: logging
+  labels:
+    app: vector
+spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: vector
+  template:
+    metadata:
+      labels:
+        app: vector
+      annotations:
+        logs.example.com/vector-config-sha256: 29418bf8c14c234707d0226f0b9807460f3568547c2cc6e231b252855ce370db
+        logs.example.com/automq-mode: production
+    spec:
+      terminationGracePeriodSeconds: 120
+      serviceAccountName: vector
+      containers:
+      - name: vector
+        image: registry.example.com/observability/timberio/vector:0.58.0-alpine@sha256:732a0051fffd0a402c8a1030f3afc4fa1282cb8b7c992e328e67f0a7cf2e0e45
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: VECTOR_SELF_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: VLS_ENDPOINT
+          value: http://victorialogs.logging.svc.cluster.local:9428
+        - name: VECTOR_LOG
+          value: warn
+        - name: TZ
+          value: Asia/Shanghai
+        - name: PROCFS_ROOT
+          value: /host/proc
+        - name: SYSFS_ROOT
+          value: /host/sys
+        - name: AUTOMQ_BOOTSTRAP_SERVERS
+          value: automq.example.internal:9092
+        - name: AUTOMQ_TOPIC
+          value: vvg.logs.v1
+        - name: AUTOMQ_PRODUCER_USERNAME
+          value: vvg-producer
+        - name: AUTOMQ_METRICS_PORT
+          value: '9598'
+        - name: AUTOMQ_STALL_BUFFER_THRESHOLD_BYTES
+          value: '67108864'
+        - name: VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION
+          value: 'true'
+        - name: VLS_TENANT_ID
+          value: 0:0
+        ports:
+        - name: api
+          containerPort: 8686
+        - name: automq-metrics
+          containerPort: 9598
+          hostPort: 9598
+        resources:
+          requests:
+            memory: 256Mi
+            cpu: 200m
+          limits:
+            memory: 2Gi
+            cpu: '4'
+        volumeMounts:
+        - name: config
+          mountPath: /etc/vector
+        - name: data
+          mountPath: /var/lib/vector
+        - name: var-log
+          mountPath: /var/log
+          readOnly: true
+        - name: run-containerd
+          mountPath: /run/containerd/containerd.sock
+          readOnly: true
+        - name: var-lib-containerd
+          mountPath: /var/lib/containerd
+          readOnly: true
+        - name: proc
+          mountPath: /host/proc
+          readOnly: true
+        - name: sys
+          mountPath: /host/sys
+          readOnly: true
+        - name: automq-auth
+          mountPath: /var/run/secrets/automq
+          readOnly: true
+        - name: config
+          mountPath: /opt/automq-health/producer-stall-check.sh
+          subPath: producer-stall-check.sh
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: api
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - /opt/automq-health/producer-stall-check.sh
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+      volumes:
+      - name: config
+        configMap:
+          name: vector-config
+      - name: data
+        hostPath:
+          path: /var/lib/vector
+          type: DirectoryOrCreate
+      - name: var-log
+        hostPath:
+          path: /var/log
+      - name: run-containerd
+        hostPath:
+          path: /run/containerd/containerd.sock
+          type: Socket
+      - name: var-lib-containerd
+        hostPath:
+          path: /var/lib/containerd
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: sys
+        hostPath:
+          path: /sys
+      - name: automq-auth
+        secret:
+          secretName: automq-vvg-producer

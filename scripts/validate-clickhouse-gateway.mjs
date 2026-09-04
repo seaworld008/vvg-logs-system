@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const dashboardPath = resolve(root, "clickhouse-gateway/grafana/dashboards/gateway-observability.json");
+const dashboardPath = resolve(
+  root,
+  "docker-compose/grafana/routes/gateway-clickhouse/dashboards/gateway-observability.json",
+);
 const dashboard = JSON.parse(readFileSync(dashboardPath, "utf8"));
 const text = JSON.stringify(dashboard);
 const panelText = JSON.stringify(dashboard.panels ?? []);

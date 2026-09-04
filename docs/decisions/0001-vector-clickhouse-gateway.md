@@ -16,7 +16,9 @@ VVG 主链路面向应用原始日志，使用 Vector、VictoriaLogs 和 Grafana
 
 ## Decision
 
-新增独立的 `clickhouse-gateway/` 专区，不把 ClickHouse 强行并入现有 VictoriaLogs 组件：
+采用独立的 Gateway结构化日志链路，不把 ClickHouse强行并入 VictoriaLogs组件。
+原始仓库目录决策已由 [ADR-003](0003-service-oriented-log-deployment-layout.md) 调整为
+按服务归位；以下数据架构决策继续有效：
 
 - Vector `file` source 只读目标 Gateway CRI 文件，持久化 checkpoint 和 disk buffer；
 - 使用经过样本验证的完整 JSON 提取，失败事件只保留脱敏技术诊断；

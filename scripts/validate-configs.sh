@@ -109,6 +109,13 @@ validate_static() {
   require_file "docs/ai-agent-operations-guide.md" "AI agent operations guide exists"
   require_file "docs/vector-clickhouse-gateway-runbook.md" \
     "Vector ClickHouse Gateway runbook exists"
+  require_file "docs/log-pipeline-selection.md" \
+    "Log pipeline selection guide exists"
+  require_file "docs/decisions/0003-service-oriented-log-deployment-layout.md" \
+    "Service-oriented repository layout ADR exists"
+  require_literal ".github/workflows/validate.yml" \
+    'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1' \
+    "GitHub Actions checkout is pinned to the current Node.js 24 release"
   require_file "docs/images/vvg-dashboard-overview.png" "Sanitized dashboard overview exists"
   require_file "docs/images/vvg-message-filter-builder.png" "Sanitized message filter screenshot exists"
   require_file "docker-compose/mcp-victorialogs/README.md" \
@@ -137,6 +144,8 @@ validate_static() {
   fi
   require_literal "README.md" 'docker-compose/mcp-victorialogs/README.md' \
     "README links the VictoriaLogs MCP deployment guide"
+  require_literal "README.md" 'docs/log-pipeline-selection.md' \
+    "README links the four-route pipeline guide"
   tracked_sensitive="$(git_ls_files | grep -E '(^|/)(\.env|服务器信息\.txt)$' || true)"
   if [[ -n "${tracked_sensitive}" ]]; then
     printf '%s\n' "${tracked_sensitive}" >&2
@@ -176,6 +185,14 @@ validate_static() {
     "Plugin bundle installer pins VictoriaLogs"
   require_literal "scripts/install-grafana-plugins.sh" 'plugins install marcusolsson-dynamictext-panel "${BUSINESS_TEXT_PLUGIN_VERSION}"' \
     "Plugin bundle installer pins Business Text"
+  require_literal "scripts/install-grafana-plugins.sh" 'GRAFANA_EXTRA_PLUGINS' \
+    "Plugin bundle installer supports route-specific pinned plugins"
+  require_literal "scripts/install-grafana-plugins.sh" \
+    'grafana-clickhouse-datasource@4.5.1' \
+    "Plugin bundle installer allowlists the exact Gateway ClickHouse plugin"
+  require_literal "docker-compose/grafana/env.example" \
+    'GRAFANA_EXTRA_PLUGINS=grafana-clickhouse-datasource@4.5.1' \
+    "Grafana documents the pinned Gateway ClickHouse plugin"
   require_literal "scripts/install-grafana-plugins.sh" 'mktemp -d' \
     "Plugin bundle installer stages changes atomically"
   require_literal "scripts/install-grafana-plugins.sh" '--user "${installer_uid}:${installer_gid}"' \
@@ -391,7 +408,9 @@ validate_runtime() {
   local plugin_dir
   local plugin_version
   local text_plugin_version
+  local gateway_plugin_version="4.5.1"
   local plugin_list
+  local grafana_route_env
 
   command -v docker >/dev/null 2>&1 || {
     printf 'docker is required for --runtime validation\n' >&2
@@ -406,6 +425,12 @@ validate_runtime() {
       config --quiet
     pass "${component} Compose configuration expands"
   done
+  docker compose \
+    --env-file docker-compose/grafana/env.example \
+    -f docker-compose/grafana/docker-compose.yml \
+    -f docker-compose/grafana/routes/gateway-clickhouse/compose.override.example.yml \
+    config --quiet
+  pass "Grafana Compose configuration expands with the Gateway ClickHouse route"
 
   if [[ "${VVG_SKIP_GRAFANA_PLUGIN_BUNDLE:-0}" == "1" ]]; then
     printf 'SKIP: Grafana plugin bundle validation explicitly disabled by VVG_SKIP_GRAFANA_PLUGIN_BUNDLE=1\n'
@@ -418,9 +443,14 @@ validate_runtime() {
     text_plugin_version="${text_plugin_version%$'\r'}"
     temp_dir="$(mktemp -d)"
     trap "chmod -R u+w -- '${temp_dir}' 2>/dev/null || true; rm -rf -- '${temp_dir}'" EXIT
-    plugin_dir="${temp_dir}/plugins/releases/grafana13.2.0-vl0.31.0-text6.3.0"
+    grafana_route_env="${temp_dir}/grafana-gateway.env"
+    cp docker-compose/grafana/env.example "${grafana_route_env}"
+    sed -i \
+      "s/^GRAFANA_EXTRA_PLUGINS=.*/GRAFANA_EXTRA_PLUGINS=grafana-clickhouse-datasource@${gateway_plugin_version}/" \
+      "${grafana_route_env}"
+    plugin_dir="${temp_dir}/plugins/releases/grafana13.2.0-vl0.31.0-text6.3.0-clickhouse4.5.1"
     bash scripts/install-grafana-plugins.sh \
-      docker-compose/grafana/env.example \
+      "${grafana_route_env}" \
       "${plugin_dir}"
     mkdir -p "${temp_dir}/grafana-data"
     chmod 0777 "${temp_dir}/grafana-data"
@@ -447,6 +477,13 @@ validate_runtime() {
       printf 'Grafana plugin bundle does not contain the expected Business Text plugin version\n' >&2
       return 1
     fi
+    if grep -Fq "grafana-clickhouse-datasource @ ${gateway_plugin_version}" <<<"${plugin_list}"; then
+      pass "External Grafana bundle exposes Gateway ClickHouse plugin ${gateway_plugin_version}"
+    else
+      printf '%s\n' "${plugin_list}" >&2
+      printf 'Grafana plugin bundle does not contain the expected Gateway ClickHouse plugin version\n' >&2
+      return 1
+    fi
   fi
 
   validate_vector_file "${repo_root}/docker-compose/vector/vector.yaml"
@@ -454,8 +491,8 @@ validate_runtime() {
 
   temp_dir="$(mktemp -d)"
   trap "rm -rf -- '${temp_dir}'" EXIT
-  for manifest in k8s-deployment/vector-k8s-containerd-cri.yaml \
-                  k8s-deployment/vector-k8s-docker-cri.yaml; do
+  for manifest in k8s-deployment/vector/vvg/direct-containerd.yaml \
+                  k8s-deployment/vector/vvg/direct-docker.yaml; do
     extracted="${temp_dir}/$(basename "${manifest}").vector.yaml"
     extract_vector_config "${manifest}" "${extracted}"
     validate_vector_file "${extracted}"

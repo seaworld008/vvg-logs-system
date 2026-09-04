@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const output = resolve(
   root,
-  "clickhouse-gateway/grafana/dashboards/gateway-observability.json",
+  "docker-compose/grafana/routes/gateway-clickhouse/dashboards/gateway-observability.json",
 );
 const source = process.argv[2] ? resolve(process.cwd(), process.argv[2]) : output;
 const datasourceUid = "gateway-clickhouse";

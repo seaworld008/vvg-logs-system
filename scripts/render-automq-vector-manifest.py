@@ -359,7 +359,7 @@ def render_daemonset(
         raise SystemExit("Vector source must mount its ConfigMap as a volume")
     pod_spec["terminationGracePeriodSeconds"] = 120
     daemonset["spec"]["template"]["metadata"].setdefault("annotations", {})[
-        "vvg.jinlingkeji.cn/vector-config-sha256"
+        "logs.example.com/vector-config-sha256"
     ] = vector_config_sha256
     containers = pod_spec["containers"]
     vector = next(container for container in containers if container.get("name") == "vector")
@@ -373,11 +373,11 @@ def render_daemonset(
         daemonset["spec"]["selector"]["matchLabels"] = {"app": app}
         daemonset["spec"]["template"]["metadata"]["labels"] = {"app": app}
         daemonset["spec"]["template"]["metadata"].setdefault("annotations", {})[
-            "vvg.jinlingkeji.cn/automq-mode"
+            "logs.example.com/automq-mode"
         ] = "shadow"
     else:
         daemonset["spec"]["template"]["metadata"].setdefault("annotations", {})[
-            "vvg.jinlingkeji.cn/automq-mode"
+            "logs.example.com/automq-mode"
         ] = "production"
 
     set_env(vector, "AUTOMQ_BOOTSTRAP_SERVERS", bootstrap)
@@ -495,8 +495,27 @@ def main() -> None:
         args.shadow_state_suffix,
     )
 
+    rendered_documents: list[dict[str, Any]] = []
+    source_daemonset_name = next(
+        doc["metadata"]["name"]
+        for doc in documents
+        if doc.get("kind") == "DaemonSet"
+        and any(
+            container.get("name") == "vector"
+            for container in doc["spec"]["template"]["spec"]["containers"]
+        )
+    )
+    for document in documents:
+        identity = (document.get("kind"), document.get("metadata", {}).get("name"))
+        if identity == ("ConfigMap", source_configmap_name):
+            rendered_documents.append(configmap)
+        elif identity == ("DaemonSet", source_daemonset_name):
+            rendered_documents.append(daemonset)
+        else:
+            rendered_documents.append(clean_object(document))
+
     output = yaml.dump_all(
-        [configmap, daemonset], Dumper=ManifestDumper, sort_keys=False,
+        rendered_documents, Dumper=ManifestDumper, sort_keys=False,
         allow_unicode=True, explicit_start=True,
     )
     args.output.write_text(output, encoding="utf-8", newline="\n")

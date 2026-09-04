@@ -1,0 +1,8 @@
+services:
+  grafana:
+    environment:
+      - CLICKHOUSE_GRAFANA_PASSWORD=${CLICKHOUSE_GRAFANA_PASSWORD}
+    volumes:
+      - ./routes/gateway-clickhouse/dashboard-provider.yaml:/etc/grafana/provisioning/dashboards/gateway-clickhouse.yaml:ro
+      - ./routes/gateway-clickhouse/dashboards:/etc/grafana/provisioning/gateway-clickhouse-dashboards:ro
+      - ./routes/gateway-clickhouse/datasources/clickhouse.yaml:/etc/grafana/provisioning/datasources/gateway-clickhouse.yaml:ro
