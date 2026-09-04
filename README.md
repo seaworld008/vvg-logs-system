@@ -340,6 +340,7 @@ Pull Request 和 `main` 分支会通过 GitHub Actions 重复执行完整校验�
 - [生产日志检索大屏配置与导入指南](docs/grafana-victorialogs-log-search-dashboard-guide.md)
 - [Grafana/VictoriaLogs 查询性能与升级运行手册](docs/grafana-victorialogs-query-performance-runbook.md)
 - [Vector/VictoriaLogs 延迟排查与升级运行手册](docs/vector-victorialogs-latency-runbook.md)
+- [VictoriaLogs 官方运行监控大屏](docker-compose/victorialogs/monitoring/README.md)
 - [故障排查指南](docs/troubleshooting.md)
 - [AI Agent 配置、升级与验收指南](docs/ai-agent-operations-guide.md)
 

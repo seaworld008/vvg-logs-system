@@ -61,6 +61,7 @@ region="$(read_env AUTOMQ_OBS_REGION)"
 endpoint="$(read_env AUTOMQ_OBS_ENDPOINT)"
 cce_node_1="$(read_env CCE_NODE_1)"
 cce_node_2="$(read_env CCE_NODE_2)"
+victorialogs_metrics_target="$(read_env VICTORIALOGS_METRICS_TARGET)"
 
 require_safe_value AUTOMQ_HOST_IP "${host_ip}" '^[0-9A-Fa-f:.]+$'
 require_safe_value AUTOMQ_EXTERNAL_PORT "${external_port}" '^[0-9]{2,5}$'
@@ -69,6 +70,8 @@ require_safe_value AUTOMQ_OBS_REGION "${region}" '^[a-z0-9-]+$'
 require_safe_value AUTOMQ_OBS_ENDPOINT "${endpoint}" '^https://[A-Za-z0-9.-]+(:[0-9]+)?$'
 require_safe_value CCE_NODE_1 "${cce_node_1}" '^[0-9A-Fa-f:.]+$'
 require_safe_value CCE_NODE_2 "${cce_node_2}" '^[0-9A-Fa-f:.]+$'
+require_safe_value VICTORIALOGS_METRICS_TARGET "${victorialogs_metrics_target}" \
+  '^[A-Za-z0-9.-]+:[0-9]{2,5}$'
 
 sed \
   -e "s/__AUTOMQ_HOST_IP__/${host_ip}/g" \
@@ -96,6 +99,7 @@ done
 sed \
   -e "s/__CCE_NODE_1__/${cce_node_1}/g" \
   -e "s/__CCE_NODE_2__/${cce_node_2}/g" \
+  -e "s/__VICTORIALOGS_METRICS_TARGET__/${victorialogs_metrics_target}/g" \
   config/prometheus.yml.template > runtime/prometheus.yml
 chmod 0644 runtime/prometheus.yml
 

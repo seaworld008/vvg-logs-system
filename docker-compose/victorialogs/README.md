@@ -91,6 +91,20 @@ curl -fsS http://127.0.0.1:9428/metrics | grep -E \
 
 每次只增加一个小档位并复测 P95/P99。若触顶计数为 0，提高并发不会解决浏览器取消、错误查询语法或网络问题。
 
+## 运行监控
+
+VictoriaLogs 在 `/metrics` 暴露官方 Prometheus 指标。生产 vmagent 应使用独立
+`victorialogs` job抓取该端点，再 remote write到夜莺使用的 VictoriaMetrics数据源。
+
+仓库提供两份固定版本的大屏：
+
+- `monitoring/grafana/victorialogs-v1.52.0.json`：VictoriaLogs `v1.52.0` 官方原始文件，
+  保留官方 SHA-256；
+- `monitoring/nightingale/victorialogs-v1.52.0.json`：夜莺 v9.1.1 原生版本，保留全部
+  73 个面板，并把唯一不支持的 Grafana table转换为 `barGauge`。
+
+来源、校验和、导入方式和升级边界见 [监控资产说明](monitoring/README.md)。
+
 ## API 使用
 
 ### 数据写入

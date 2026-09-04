@@ -137,14 +137,20 @@ Kafka/Vector错误和 OBS 4xx/5xx为零。
 ## 6. 监控
 
 AutoMQ Prometheus监听容器内 `8890`，宿主机仅绑定 loopback。两个 consumer 分别暴露
-`9598`/`9599`，CCE producer 使用同样的 hostPort。固定版 vmagent 抓取这些端点和
-本机 node-exporter，remote write到现有 VictoriaMetrics。
+`9598`/`9599`，CCE producer 使用同样的 hostPort。固定版 vmagent 抓取这些端点、
+本机 node-exporter、VictoriaLogs `/metrics` 和 vmagent 自身，再 remote write到现有
+VictoriaMetrics。VictoriaLogs target通过 `VICTORIALOGS_METRICS_TARGET=host:port` 渲染，
+不得把真实内网地址写回仓库模板。
 
 导入 `monitoring/grafana/automq-cluster.json` 到现有监控 Grafana，datasource变量绑定
-现有 VictoriaMetrics；将原生夜莺大屏和 `monitoring/alert-rules.yml` 一起导入金龄云
-SaaS 业务组，不得放入通用基础设施或其他项目业务组。至少验证 Broker down、
-Controller、S3 request error、Kafka request error、consumer lag、producer queue、
-可用内存和 CPU告警均可产生并恢复。
+现有 VictoriaMetrics；夜莺使用
+`monitoring/nightingale/automq-cluster.json` 原生增强版，避免官方 Grafana模板的空标题
+和表格转换丢失。VictoriaLogs 使用随精确版本发布的官方单机大屏
+`docker-compose/victorialogs/monitoring/grafana/victorialogs-v1.52.0.json`。三个资产和
+`monitoring/alert-rules.yml` 一起归属金龄云 SaaS业务组，不得放入通用基础设施或其他
+项目业务组。至少验证 Broker down、Controller、S3 request error、Kafka request
+error、consumer lag、producer queue、VictoriaLogs写入/查询/丢弃/磁盘、可用内存和
+CPU告警均可产生并恢复。
 
 ## 7. 回滚
 

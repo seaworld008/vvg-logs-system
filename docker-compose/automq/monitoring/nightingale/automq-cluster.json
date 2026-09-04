@@ -1,17 +1,35 @@
 {
-  "name": "AutoMQ Logs - Production",
-  "tags": "automq production logs",
-  "note": "AutoMQ log buffer health, throughput, lag and recovery signals.",
+  "name": "AutoMQ 生产集群监控（官方指标增强版）",
+  "tags": "automq production kafka victorialogs vector",
+  "note": "基于 AutoMQ 1.7.4 官方 Cluster Overview 与 Prometheus 指标语义，补齐夜莺原生标题、说明、Broker/请求/KRaft/JVM/S3/WAL/Vector 链路监控。单节点部署不是高可用架构。",
   "ident": "automq-production-cluster",
   "uuid": 1788455364871001,
   "configs": {
     "version": "3.4.0",
-    "links": [],
+    "links": [
+      {
+        "title": "AutoMQ 1.7.4 官方监控源",
+        "url": "https://github.com/AutoMQ/automq/blob/1.7.4/docker/telemetry/grafana/provisioning/dashboards/User/cluster.json",
+        "targetBlank": true
+      },
+      {
+        "title": "AutoMQ 指标说明",
+        "url": "https://docs.automq.com/automq/observability/metrics",
+        "targetBlank": true
+      }
+    ],
     "var": [
+      {
+        "type": "datasource",
+        "name": "datasource",
+        "label": "数据源",
+        "definition": "prometheus",
+        "hide": false
+      },
       {
         "type": "query",
         "name": "cluster_id",
-        "label": "Cluster",
+        "label": "AutoMQ 集群",
         "allOption": false,
         "multi": false,
         "reg": "",
@@ -21,34 +39,49 @@
           "cate": "prometheus",
           "value": "${datasource}"
         }
-      },
-      {
-        "type": "datasource",
-        "name": "datasource",
-        "label": "Data Source",
-        "definition": "prometheus",
-        "hide": false
       }
     ],
     "panels": [
       {
         "version": "3.4.0",
-        "id": "automq-controller",
-        "type": "stat",
-        "name": "Active Controller",
-        "links": [],
+        "id": "row-health",
+        "type": "row",
+        "name": "一、集群健康与容量",
+        "collapsed": true,
         "layout": {
-          "h": 6,
-          "w": 4,
+          "h": 1,
+          "w": 24,
           "x": 0,
           "y": 0,
+          "i": "row-health",
+          "isResizable": false
+        },
+        "targets": [],
+        "options": {},
+        "custom": {},
+        "overrides": [],
+        "transformationsNG": []
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-controller",
+        "type": "stat",
+        "name": "活动 Controller",
+        "description": "KRaft 当前活动 Controller 数量。单节点基线应为 1；为 0 时集群无法完成控制面操作。",
+        "links": [],
+        "layout": {
+          "h": 5,
+          "w": 3,
+          "x": 0,
+          "y": 1,
           "i": "automq-controller"
         },
         "targets": [
           {
             "refId": "A",
             "expr": "sum(kafka_controller_active_count{job=\"$cluster_id\"})",
-            "legend": "controller"
+            "legend": "Controller",
+            "instant": true
           }
         ],
         "options": {
@@ -58,17 +91,21 @@
             "style": "line",
             "steps": [
               {
-                "color": "#73BF69",
+                "color": "#F2495C",
                 "value": null,
                 "type": "base"
+              },
+              {
+                "color": "#73BF69",
+                "value": 1
               }
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "none"
           },
           "legend": {
-            "displayMode": "list",
+            "displayMode": "table",
             "placement": "bottom"
           },
           "tooltip": {
@@ -78,10 +115,13 @@
         },
         "custom": {
           "version": "3.4.0",
-          "textMode": "value",
+          "textMode": "valueAndName",
           "calc": "lastNotNull",
-          "colorMode": "value"
+          "colorMode": "value",
+          "textSize": {}
         },
+        "overrides": [],
+        "transformationsNG": [],
         "maxPerRow": 4,
         "datasourceCate": "prometheus",
         "datasourceValue": "${datasource}"
@@ -90,20 +130,22 @@
         "version": "3.4.0",
         "id": "automq-broker",
         "type": "stat",
-        "name": "Active Broker",
+        "name": "活动 Broker",
+        "description": "当前可提供 Kafka 读写服务的 Broker 数量。现网单节点基线应为 1。",
         "links": [],
         "layout": {
-          "h": 6,
-          "w": 4,
-          "x": 4,
-          "y": 0,
+          "h": 5,
+          "w": 3,
+          "x": 3,
+          "y": 1,
           "i": "automq-broker"
         },
         "targets": [
           {
             "refId": "A",
             "expr": "sum(kafka_broker_active_count{job=\"$cluster_id\"})",
-            "legend": "broker"
+            "legend": "Broker",
+            "instant": true
           }
         ],
         "options": {
@@ -113,17 +155,21 @@
             "style": "line",
             "steps": [
               {
-                "color": "#73BF69",
+                "color": "#F2495C",
                 "value": null,
                 "type": "base"
+              },
+              {
+                "color": "#73BF69",
+                "value": 1
               }
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "none"
           },
           "legend": {
-            "displayMode": "list",
+            "displayMode": "table",
             "placement": "bottom"
           },
           "tooltip": {
@@ -133,10 +179,13 @@
         },
         "custom": {
           "version": "3.4.0",
-          "textMode": "value",
+          "textMode": "valueAndName",
           "calc": "lastNotNull",
-          "colorMode": "value"
+          "colorMode": "value",
+          "textSize": {}
         },
+        "overrides": [],
+        "transformationsNG": [],
         "maxPerRow": 4,
         "datasourceCate": "prometheus",
         "datasourceValue": "${datasource}"
@@ -145,20 +194,22 @@
         "version": "3.4.0",
         "id": "automq-fenced",
         "type": "stat",
-        "name": "Fenced Broker",
+        "name": "被隔离 Broker",
+        "description": "被 Controller 隔离、不能承担读写的 Broker 数量。正常值为 0。",
         "links": [],
         "layout": {
-          "h": 6,
-          "w": 4,
-          "x": 8,
-          "y": 0,
+          "h": 5,
+          "w": 3,
+          "x": 6,
+          "y": 1,
           "i": "automq-fenced"
         },
         "targets": [
           {
             "refId": "A",
             "expr": "sum(kafka_broker_fenced_count{job=\"$cluster_id\"}) or vector(0)",
-            "legend": "fenced"
+            "legend": "Fenced",
+            "instant": true
           }
         ],
         "options": {
@@ -179,10 +230,10 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "none"
           },
           "legend": {
-            "displayMode": "list",
+            "displayMode": "table",
             "placement": "bottom"
           },
           "tooltip": {
@@ -192,10 +243,77 @@
         },
         "custom": {
           "version": "3.4.0",
-          "textMode": "value",
+          "textMode": "valueAndName",
           "calc": "lastNotNull",
-          "colorMode": "value"
+          "colorMode": "value",
+          "textSize": {}
         },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-offline",
+        "type": "stat",
+        "name": "离线分区",
+        "description": "没有可用 Leader 的分区数量。正常值为 0；大于 0 会直接影响生产或消费。",
+        "links": [],
+        "layout": {
+          "h": 5,
+          "w": 3,
+          "x": 9,
+          "y": 1,
+          "i": "automq-offline"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(kafka_partition_offline_count{job=\"$cluster_id\"}) or vector(0)",
+            "legend": "Offline",
+            "instant": true
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              },
+              {
+                "color": "#F2495C",
+                "value": 1
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "none"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "textMode": "valueAndName",
+          "calc": "lastNotNull",
+          "colorMode": "value",
+          "textSize": {}
+        },
+        "overrides": [],
+        "transformationsNG": [],
         "maxPerRow": 4,
         "datasourceCate": "prometheus",
         "datasourceValue": "${datasource}"
@@ -204,20 +322,22 @@
         "version": "3.4.0",
         "id": "automq-topics",
         "type": "stat",
-        "name": "Topics",
+        "name": "Topic 数",
+        "description": "AutoMQ 中当前 Topic 总数，包含系统内部 Topic。",
         "links": [],
         "layout": {
-          "h": 6,
-          "w": 4,
+          "h": 5,
+          "w": 3,
           "x": 12,
-          "y": 0,
+          "y": 1,
           "i": "automq-topics"
         },
         "targets": [
           {
             "refId": "A",
-            "expr": "sum(kafka_topic_count{job=\"$cluster_id\"})",
-            "legend": "topics"
+            "expr": "max(kafka_topic_count{job=\"$cluster_id\"})",
+            "legend": "Topics",
+            "instant": true
           }
         ],
         "options": {
@@ -234,10 +354,10 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "none"
           },
           "legend": {
-            "displayMode": "list",
+            "displayMode": "table",
             "placement": "bottom"
           },
           "tooltip": {
@@ -247,10 +367,13 @@
         },
         "custom": {
           "version": "3.4.0",
-          "textMode": "value",
+          "textMode": "valueAndName",
           "calc": "lastNotNull",
-          "colorMode": "value"
+          "colorMode": "value",
+          "textSize": {}
         },
+        "overrides": [],
+        "transformationsNG": [],
         "maxPerRow": 4,
         "datasourceCate": "prometheus",
         "datasourceValue": "${datasource}"
@@ -259,20 +382,22 @@
         "version": "3.4.0",
         "id": "automq-partitions",
         "type": "stat",
-        "name": "Partitions",
+        "name": "分区总数",
+        "description": "所有 Topic 的分区总数。现网业务 Topic 之外还包含 Kafka/AutoMQ 系统分区。",
         "links": [],
         "layout": {
-          "h": 6,
-          "w": 4,
-          "x": 16,
-          "y": 0,
+          "h": 5,
+          "w": 3,
+          "x": 15,
+          "y": 1,
           "i": "automq-partitions"
         },
         "targets": [
           {
             "refId": "A",
-            "expr": "sum(kafka_partition_total_count{job=\"$cluster_id\"})",
-            "legend": "partitions"
+            "expr": "max(kafka_partition_total_count{job=\"$cluster_id\"})",
+            "legend": "Partitions",
+            "instant": true
           }
         ],
         "options": {
@@ -289,10 +414,10 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "none"
           },
           "legend": {
-            "displayMode": "list",
+            "displayMode": "table",
             "placement": "bottom"
           },
           "tooltip": {
@@ -302,10 +427,13 @@
         },
         "custom": {
           "version": "3.4.0",
-          "textMode": "value",
+          "textMode": "valueAndName",
           "calc": "lastNotNull",
-          "colorMode": "value"
+          "colorMode": "value",
+          "textSize": {}
         },
+        "overrides": [],
+        "transformationsNG": [],
         "maxPerRow": 4,
         "datasourceCate": "prometheus",
         "datasourceValue": "${datasource}"
@@ -314,20 +442,22 @@
         "version": "3.4.0",
         "id": "automq-size",
         "type": "stat",
-        "name": "Stored Log Bytes",
+        "name": "逻辑日志量",
+        "description": "按 Topic/Partition 去重后的 Kafka 逻辑日志大小，不等于 OBS 实际计费容量。",
         "links": [],
         "layout": {
-          "h": 6,
-          "w": 4,
-          "x": 20,
-          "y": 0,
+          "h": 5,
+          "w": 3,
+          "x": 18,
+          "y": 1,
           "i": "automq-size"
         },
         "targets": [
           {
             "refId": "A",
             "expr": "sum(max by(topic,partition) (kafka_log_size{job=\"$cluster_id\"}))",
-            "legend": "bytes"
+            "legend": "Stored",
+            "instant": true
           }
         ],
         "options": {
@@ -344,10 +474,10 @@
             ]
           },
           "standardOptions": {
-            "util": "bytesIEC"
+            "unit": "bytesIEC"
           },
           "legend": {
-            "displayMode": "list",
+            "displayMode": "table",
             "placement": "bottom"
           },
           "tooltip": {
@@ -357,37 +487,131 @@
         },
         "custom": {
           "version": "3.4.0",
-          "textMode": "value",
+          "textMode": "valueAndName",
           "calc": "lastNotNull",
-          "colorMode": "value"
+          "colorMode": "value",
+          "textSize": {}
         },
+        "overrides": [],
+        "transformationsNG": [],
         "maxPerRow": 4,
         "datasourceCate": "prometheus",
         "datasourceValue": "${datasource}"
       },
       {
         "version": "3.4.0",
-        "id": "automq-network",
-        "type": "timeseries",
-        "name": "Broker Bytes In / Out",
+        "id": "automq-errors",
+        "type": "stat",
+        "name": "错误请求/秒",
+        "description": "Kafka 非 NONE 错误响应速率。短时认证探测可能产生少量错误，持续增长必须按 error 标签定位。",
         "links": [],
         "layout": {
-          "h": 10,
-          "w": 12,
+          "h": 5,
+          "w": 3,
+          "x": 21,
+          "y": 1,
+          "i": "automq-errors"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(rate(kafka_request_error_count_total{job=\"$cluster_id\",error!=\"NONE\"}[$__rate_interval])) or vector(0)",
+            "legend": "Errors/s",
+            "instant": true
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              },
+              {
+                "color": "#FADE2A",
+                "value": 0.01
+              },
+              {
+                "color": "#F2495C",
+                "value": 1
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "reqps"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "textMode": "valueAndName",
+          "calc": "lastNotNull",
+          "colorMode": "value",
+          "textSize": {}
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "row-traffic",
+        "type": "row",
+        "name": "二、流量、请求与 Broker 压力",
+        "collapsed": true,
+        "layout": {
+          "h": 1,
+          "w": 24,
           "x": 0,
           "y": 6,
+          "i": "row-traffic",
+          "isResizable": false
+        },
+        "targets": [],
+        "options": {},
+        "custom": {},
+        "overrides": [],
+        "transformationsNG": []
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-network",
+        "type": "timeseries",
+        "name": "Broker 网络吞吐",
+        "description": "Broker 接收与发送字节速率；入站主要是 producer，出站主要是 consumer。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 7,
           "i": "automq-network"
         },
         "targets": [
           {
             "refId": "A",
             "expr": "sum(rate(kafka_broker_network_io_bytes_total{job=\"$cluster_id\",direction=\"in\"}[$__rate_interval]))",
-            "legend": "in"
+            "legend": "写入",
+            "instant": false
           },
           {
             "refId": "B",
             "expr": "sum(rate(kafka_broker_network_io_bytes_total{job=\"$cluster_id\",direction=\"out\"}[$__rate_interval]))",
-            "legend": "out"
+            "legend": "读取",
+            "instant": false
           }
         ],
         "options": {
@@ -404,10 +628,10 @@
             ]
           },
           "standardOptions": {
-            "util": "bytesSIps"
+            "unit": "bytesSecIEC"
           },
           "legend": {
-            "displayMode": "list",
+            "displayMode": "table",
             "placement": "bottom"
           },
           "tooltip": {
@@ -419,136 +643,17 @@
           "version": "3.4.0",
           "drawStyle": "lines",
           "lineInterpolation": "linear",
-          "fillOpacity": 0.2,
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
           "stack": "off"
         },
-        "maxPerRow": 4,
-        "datasourceCate": "prometheus",
-        "datasourceValue": "${datasource}"
-      },
-      {
-        "version": "3.4.0",
-        "id": "automq-requests",
-        "type": "timeseries",
-        "name": "Produce / Fetch Requests",
-        "links": [],
-        "layout": {
-          "h": 10,
-          "w": 12,
-          "x": 12,
-          "y": 6,
-          "i": "automq-requests"
-        },
-        "targets": [
-          {
-            "refId": "A",
-            "expr": "sum(rate(kafka_request_count_total{job=\"$cluster_id\",type=\"Produce\"}[$__rate_interval]))",
-            "legend": "produce"
-          },
-          {
-            "refId": "B",
-            "expr": "sum(rate(kafka_request_count_total{job=\"$cluster_id\",type=\"Fetch\"}[$__rate_interval]))",
-            "legend": "fetch"
-          },
-          {
-            "refId": "C",
-            "expr": "sum(rate(kafka_request_error_count_total{job=\"$cluster_id\",error!=\"NONE\"}[$__rate_interval])) or vector(0)",
-            "legend": "errors"
-          }
-        ],
-        "options": {
-          "valueMappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "style": "line",
-            "steps": [
-              {
-                "color": "#73BF69",
-                "value": null,
-                "type": "base"
-              }
-            ]
-          },
-          "standardOptions": {
-            "util": "reqps"
-          },
-          "legend": {
-            "displayMode": "list",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "all",
-            "sort": "desc"
-          }
-        },
-        "custom": {
-          "version": "3.4.0",
-          "drawStyle": "lines",
-          "lineInterpolation": "linear",
-          "fillOpacity": 0.2,
-          "stack": "off"
-        },
-        "maxPerRow": 4,
-        "datasourceCate": "prometheus",
-        "datasourceValue": "${datasource}"
-      },
-      {
-        "version": "3.4.0",
-        "id": "automq-latency",
-        "type": "timeseries",
-        "name": "Kafka Request P99",
-        "links": [],
-        "layout": {
-          "h": 10,
-          "w": 12,
-          "x": 0,
-          "y": 16,
-          "i": "automq-latency"
-        },
-        "targets": [
-          {
-            "refId": "A",
-            "expr": "max(kafka_request_time_99p_milliseconds{job=\"$cluster_id\",type=\"Produce\"})",
-            "legend": "produce"
-          },
-          {
-            "refId": "B",
-            "expr": "max(kafka_request_time_99p_milliseconds{job=\"$cluster_id\",type=\"Fetch\"})",
-            "legend": "fetch"
-          }
-        ],
-        "options": {
-          "valueMappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "style": "line",
-            "steps": [
-              {
-                "color": "#73BF69",
-                "value": null,
-                "type": "base"
-              }
-            ]
-          },
-          "standardOptions": {
-            "util": "ms"
-          },
-          "legend": {
-            "displayMode": "list",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "all",
-            "sort": "desc"
-          }
-        },
-        "custom": {
-          "version": "3.4.0",
-          "drawStyle": "lines",
-          "lineInterpolation": "linear",
-          "fillOpacity": 0.2,
-          "stack": "off"
-        },
+        "overrides": [],
+        "transformationsNG": [],
         "maxPerRow": 4,
         "datasourceCate": "prometheus",
         "datasourceValue": "${datasource}"
@@ -557,20 +662,22 @@
         "version": "3.4.0",
         "id": "automq-topic-rate",
         "type": "timeseries",
-        "name": "Topic Message Rate",
+        "name": "各 Topic 消息写入速率",
+        "description": "按 Topic 展示进入 Broker 的消息速率，用于识别 VVG 与 Gateway 流量变化。",
         "links": [],
         "layout": {
-          "h": 10,
+          "h": 9,
           "w": 12,
           "x": 12,
-          "y": 16,
+          "y": 7,
           "i": "automq-topic-rate"
         },
         "targets": [
           {
             "refId": "A",
             "expr": "sum by(topic) (rate(kafka_message_count_total{job=\"$cluster_id\",direction=\"in\"}[$__rate_interval]))",
-            "legend": "{{topic}} in"
+            "legend": "{{topic}}",
+            "instant": false
           }
         ],
         "options": {
@@ -587,10 +694,10 @@
             ]
           },
           "standardOptions": {
-            "util": "mps"
+            "unit": "mps"
           },
           "legend": {
-            "displayMode": "list",
+            "displayMode": "table",
             "placement": "bottom"
           },
           "tooltip": {
@@ -602,31 +709,47 @@
           "version": "3.4.0",
           "drawStyle": "lines",
           "lineInterpolation": "linear",
-          "fillOpacity": 0.2,
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
           "stack": "off"
         },
+        "overrides": [],
+        "transformationsNG": [],
         "maxPerRow": 4,
         "datasourceCate": "prometheus",
         "datasourceValue": "${datasource}"
       },
       {
         "version": "3.4.0",
-        "id": "automq-consumer-lag",
+        "id": "automq-requests",
         "type": "timeseries",
-        "name": "Vector Consumer Lag",
+        "name": "Produce / Fetch 请求速率",
+        "description": "Broker 每秒处理的生产与拉取请求。请求数和消息数不同，一个请求可包含多个消息。",
         "links": [],
         "layout": {
-          "h": 10,
-          "w": 12,
+          "h": 9,
+          "w": 8,
           "x": 0,
-          "y": 26,
-          "i": "automq-consumer-lag"
+          "y": 16,
+          "i": "automq-requests"
         },
         "targets": [
           {
             "refId": "A",
-            "expr": "sum by(consumer_group,topic) (clamp_min(vector_kafka_consumer_lag{partition_id!=\"-1\"},0))",
-            "legend": "{{consumer_group}} / {{topic}}"
+            "expr": "sum(rate(kafka_request_count_total{job=\"$cluster_id\",type=\"Produce\"}[$__rate_interval]))",
+            "legend": "Produce",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "sum(rate(kafka_request_count_total{job=\"$cluster_id\",type=\"Fetch\"}[$__rate_interval]))",
+            "legend": "Fetch",
+            "instant": false
           }
         ],
         "options": {
@@ -643,10 +766,10 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "reqps"
           },
           "legend": {
-            "displayMode": "list",
+            "displayMode": "table",
             "placement": "bottom"
           },
           "tooltip": {
@@ -658,9 +781,451 @@
           "version": "3.4.0",
           "drawStyle": "lines",
           "lineInterpolation": "linear",
-          "fillOpacity": 0.2,
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
           "stack": "off"
         },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-latency",
+        "type": "timeseries",
+        "name": "Kafka 请求 P99 延迟",
+        "description": "Produce/Fetch 请求端到端处理时间的第 99 百分位；持续升高时结合队列、线程空闲率和 S3 延迟判断。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 8,
+          "y": 16,
+          "i": "automq-latency"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "max(kafka_request_time_99p_milliseconds{job=\"$cluster_id\",type=\"Produce\"})",
+            "legend": "Produce P99",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "max(kafka_request_time_99p_milliseconds{job=\"$cluster_id\",type=\"Fetch\"})",
+            "legend": "Fetch P99",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "ms"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-request-errors",
+        "type": "timeseries",
+        "name": "Kafka 错误响应明细",
+        "description": "按 Kafka error 标签拆分非成功响应，便于区分认证、Leader、超时和消息过大等错误。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 16,
+          "y": 16,
+          "i": "automq-request-errors"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(error,type) (rate(kafka_request_error_count_total{job=\"$cluster_id\",error!=\"NONE\"}[$__rate_interval]))",
+            "legend": "{{type}} / {{error}}",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "reqps"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-queues",
+        "type": "timeseries",
+        "name": "请求与响应队列",
+        "description": "Broker 网络线程与 I/O 线程之间的等待队列。持续堆积通常表示线程或下游存储处理不及。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 0,
+          "y": 25,
+          "i": "automq-queues"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "max by(type) (kafka_request_queue_size{job=\"$cluster_id\"})",
+            "legend": "请求 {{type}}",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "max by(type) (kafka_response_queue_size{job=\"$cluster_id\"})",
+            "legend": "响应 {{type}}",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "none"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-purgatory",
+        "type": "timeseries",
+        "name": "延迟请求等待数",
+        "description": "等待副本确认或数据可用的 Produce/Fetch 请求数量。持续上升要检查 Broker、Leader 与对象存储。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 8,
+          "y": 25,
+          "i": "automq-purgatory"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(type) (kafka_purgatory_size{job=\"$cluster_id\"})",
+            "legend": "{{type}}",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "none"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-thread-idle",
+        "type": "timeseries",
+        "name": "网络 / I/O 线程空闲率",
+        "description": "线程空闲率越低表示 Broker 越忙。长期接近 0 时请求延迟和队列通常会同步升高。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 16,
+          "y": 25,
+          "i": "automq-thread-idle"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "min(kafka_network_threads_idle_rate{job=\"$cluster_id\"})",
+            "legend": "Network",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "min(kafka_io_threads_idle_rate_1m{job=\"$cluster_id\"})",
+            "legend": "I/O",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "percentUnit"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "row-delivery",
+        "type": "row",
+        "name": "三、生产者、消费者与积压",
+        "collapsed": true,
+        "layout": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 34,
+          "i": "row-delivery",
+          "isResizable": false
+        },
+        "targets": [],
+        "options": {},
+        "custom": {},
+        "overrides": [],
+        "transformationsNG": []
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-consumer-lag",
+        "type": "timeseries",
+        "name": "Vector Consumer Lag",
+        "description": "Kafka 最新 offset 与 Vector consumer 已提交 offset 的差值。正式 VVG/Gateway 组应在流量稳定后回落到低位。",
+        "links": [],
+        "layout": {
+          "h": 10,
+          "w": 12,
+          "x": 0,
+          "y": 35,
+          "i": "automq-consumer-lag"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(consumer_group,topic) (clamp_min(vector_kafka_consumer_lag{partition_id!=\"-1\"},0))",
+            "legend": "{{consumer_group}} / {{topic}}",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "none"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
         "maxPerRow": 4,
         "datasourceCate": "prometheus",
         "datasourceValue": "${datasource}"
@@ -669,20 +1234,22 @@
         "version": "3.4.0",
         "id": "automq-producer-buffer",
         "type": "timeseries",
-        "name": "Vector Producer Disk Buffer",
+        "name": "Vector Producer 磁盘缓冲",
+        "description": "CCE producer 尚未可靠写入 AutoMQ 的本地磁盘队列。Broker 故障时会增长，恢复后必须持续下降。",
         "links": [],
         "layout": {
           "h": 10,
           "w": 12,
           "x": 12,
-          "y": 26,
+          "y": 35,
           "i": "automq-producer-buffer"
         },
         "targets": [
           {
             "refId": "A",
             "expr": "sum by(component_id,host) (vector_buffer_size_bytes{component_type=\"kafka\",component_id=~\"automq(_lane_[ab])?\"})",
-            "legend": "{{host}} / {{component_id}}"
+            "legend": "{{host}} / {{component_id}}",
+            "instant": false
           }
         ],
         "options": {
@@ -699,10 +1266,10 @@
             ]
           },
           "standardOptions": {
-            "util": "bytesIEC"
+            "unit": "bytesIEC"
           },
           "legend": {
-            "displayMode": "list",
+            "displayMode": "table",
             "placement": "bottom"
           },
           "tooltip": {
@@ -714,9 +1281,17 @@
           "version": "3.4.0",
           "drawStyle": "lines",
           "lineInterpolation": "linear",
-          "fillOpacity": 0.2,
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
           "stack": "off"
         },
+        "overrides": [],
+        "transformationsNG": [],
         "maxPerRow": 4,
         "datasourceCate": "prometheus",
         "datasourceValue": "${datasource}"
@@ -725,35 +1300,52 @@
         "version": "3.4.0",
         "id": "automq-groups",
         "type": "barGauge",
-        "name": "Consumer Group State",
+        "name": "Consumer Group 状态",
+        "description": "stable 为正常工作组；preparing/completing_rebalance 持续非零表示频繁再均衡；empty/dead 多为历史组。",
         "links": [],
         "layout": {
           "h": 9,
-          "w": 12,
+          "w": 8,
           "x": 0,
-          "y": 36,
+          "y": 45,
           "i": "automq-groups"
         },
         "targets": [
           {
             "refId": "A",
             "expr": "sum(kafka_group_count{job=\"$cluster_id\"})",
-            "legend": "total"
+            "legend": "总数",
+            "instant": true
           },
           {
             "refId": "B",
             "expr": "sum(kafka_group_stable_count{job=\"$cluster_id\"})",
-            "legend": "stable"
+            "legend": "稳定",
+            "instant": true
           },
           {
             "refId": "C",
-            "expr": "sum(kafka_group_empty_count{job=\"$cluster_id\"})",
-            "legend": "empty"
+            "expr": "sum(kafka_group_preparing_rebalance_count{job=\"$cluster_id\"})",
+            "legend": "准备再均衡",
+            "instant": true
           },
           {
             "refId": "D",
+            "expr": "sum(kafka_group_completing_rebalance_count{job=\"$cluster_id\"})",
+            "legend": "完成再均衡",
+            "instant": true
+          },
+          {
+            "refId": "E",
+            "expr": "sum(kafka_group_empty_count{job=\"$cluster_id\"})",
+            "legend": "空组",
+            "instant": true
+          },
+          {
+            "refId": "F",
             "expr": "sum(kafka_group_dead_count{job=\"$cluster_id\"})",
-            "legend": "dead"
+            "legend": "已删除",
+            "instant": true
           }
         ],
         "options": {
@@ -770,10 +1362,10 @@
             ]
           },
           "standardOptions": {
-            "util": "none"
+            "unit": "none"
           },
           "legend": {
-            "displayMode": "list",
+            "displayMode": "table",
             "placement": "bottom"
           },
           "tooltip": {
@@ -783,30 +1375,43 @@
         },
         "custom": {
           "version": "3.4.0",
-          "calc": "lastNotNull"
+          "calc": "lastNotNull",
+          "displayMode": "basic",
+          "orientation": "horizontal",
+          "textSize": {}
         },
+        "overrides": [],
+        "transformationsNG": [],
         "maxPerRow": 4,
         "datasourceCate": "prometheus",
         "datasourceValue": "${datasource}"
       },
       {
         "version": "3.4.0",
-        "id": "automq-s3",
+        "id": "automq-vector-throughput",
         "type": "timeseries",
-        "name": "Object Storage Operations",
+        "name": "Vector Kafka 收发事件速率",
+        "description": "各 producer/consumer Kafka 组件接收与发送事件速率，用来定位积压发生在入 Kafka 还是出 Kafka。",
         "links": [],
         "layout": {
           "h": 9,
-          "w": 12,
-          "x": 12,
-          "y": 36,
-          "i": "automq-s3"
+          "w": 8,
+          "x": 8,
+          "y": 45,
+          "i": "automq-vector-throughput"
         },
         "targets": [
           {
             "refId": "A",
-            "expr": "sum by(operation_name,status) (rate(kafka_stream_operation_latency_count{operation_type=\"S3Request\"}[$__rate_interval]))",
-            "legend": "{{operation_name}} / {{status}}"
+            "expr": "sum by(host,component_id) (rate(vector_component_received_events_total{component_type=\"kafka\"}[$__rate_interval]))",
+            "legend": "收到 {{host}} / {{component_id}}",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "sum by(host,component_id) (rate(vector_component_sent_events_total{component_type=\"kafka\"}[$__rate_interval]))",
+            "legend": "发出 {{host}} / {{component_id}}",
+            "instant": false
           }
         ],
         "options": {
@@ -823,10 +1428,10 @@
             ]
           },
           "standardOptions": {
-            "util": "reqps"
+            "unit": "mps"
           },
           "legend": {
-            "displayMode": "list",
+            "displayMode": "table",
             "placement": "bottom"
           },
           "tooltip": {
@@ -838,9 +1443,1259 @@
           "version": "3.4.0",
           "drawStyle": "lines",
           "lineInterpolation": "linear",
-          "fillOpacity": 0.2,
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
           "stack": "off"
         },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-vector-errors",
+        "type": "timeseries",
+        "name": "Vector 交付错误与丢弃",
+        "description": "Vector 组件错误和主动丢弃事件速率。生产链路持续非零必须结合 component_id 与 error_type 排查。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 16,
+          "y": 45,
+          "i": "automq-vector-errors"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(host,component_id,error_type) (rate(vector_component_errors_total[$__rate_interval]))",
+            "legend": "错误 {{host}} / {{component_id}} / {{error_type}}",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "sum by(host,component_id) (rate(vector_component_discarded_events_total[$__rate_interval]))",
+            "legend": "丢弃 {{host}} / {{component_id}}",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "mps"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "row-storage",
+        "type": "row",
+        "name": "四、S3 / OBS、WAL 与缓存",
+        "collapsed": true,
+        "layout": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 54,
+          "i": "row-storage",
+          "isResizable": false
+        },
+        "targets": [],
+        "options": {},
+        "custom": {},
+        "overrides": [],
+        "transformationsNG": []
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-s3-ops",
+        "type": "timeseries",
+        "name": "对象存储请求速率",
+        "description": "AutoMQ 到对象存储的 S3Request 操作速率，按操作名和状态拆分。非成功状态持续出现需要检查 OBS 网络、权限与限流。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 55,
+          "i": "automq-s3-ops"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(operation_name,status) (rate(kafka_stream_operation_latency_count{job=\"$cluster_id\",operation_type=\"S3Request\"}[$__rate_interval]))",
+            "legend": "{{operation_name}} / {{status}}",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "reqps"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-s3-latency",
+        "type": "timeseries",
+        "name": "对象存储操作 P99 延迟",
+        "description": "S3Request 操作第 99 百分位延迟。延迟升高会传导到 WAL 上传、冷读和 Kafka 请求尾延迟。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 55,
+          "i": "automq-s3-latency"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "max by(operation_name,status) (kafka_stream_operation_latency_99p_nanoseconds{job=\"$cluster_id\",operation_type=\"S3Request\"}) / 1000000",
+            "legend": "{{operation_name}} / {{status}}",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "ms"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-s3-throughput",
+        "type": "timeseries",
+        "name": "对象存储上传 / 下载吞吐",
+        "description": "AutoMQ 向 OBS 上传和从 OBS 冷读的字节速率。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 0,
+          "y": 64,
+          "i": "automq-s3-throughput"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(rate(kafka_stream_upload_size_bytes_total{job=\"$cluster_id\"}[$__rate_interval]))",
+            "legend": "上传",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "sum(rate(kafka_stream_download_size_bytes_total{job=\"$cluster_id\"}[$__rate_interval]))",
+            "legend": "下载",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "bytesSecIEC"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-wal",
+        "type": "timeseries",
+        "name": "WAL 待上传字节",
+        "description": "本地 WAL 中等待上传到对象存储的数据。短暂波动正常，持续上升表示上传能力或对象存储异常。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 8,
+          "y": 64,
+          "i": "automq-wal"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(kafka_stream_wal_pending_upload_bytes{job=\"$cluster_id\"})",
+            "legend": "待上传",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "bytesIEC"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-cache",
+        "type": "timeseries",
+        "name": "AutoMQ 内存与缓存",
+        "description": "流缓冲、WAL cache 与 block cache 的实际占用，用于核对 6 GiB cgroup 内的 Tiny 内存基线。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 16,
+          "y": 64,
+          "i": "automq-cache"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(kafka_stream_buffer_allocated_memory_size_bytes{job=\"$cluster_id\"})",
+            "legend": "流缓冲",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "sum(kafka_stream_delta_wal_cache_size_bytes{job=\"$cluster_id\"})",
+            "legend": "WAL cache",
+            "instant": false
+          },
+          {
+            "refId": "C",
+            "expr": "sum(kafka_stream_block_cache_size_bytes{job=\"$cluster_id\"})",
+            "legend": "Block cache",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "bytesIEC"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-s3-objects",
+        "type": "timeseries",
+        "name": "S3 对象数量",
+        "description": "按对象状态统计 AutoMQ 管理的 S3 对象数量，用于观察对象增长和 compaction 是否异常。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 0,
+          "y": 73,
+          "i": "automq-s3-objects"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(state) (kafka_stream_s3_object_count{job=\"$cluster_id\"})",
+            "legend": "{{state}}",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "none"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-s3-object-size",
+        "type": "timeseries",
+        "name": "S3 对象容量",
+        "description": "按对象状态统计 AutoMQ 管理的 S3 对象总大小；这是对象层视角，与 Kafka 逻辑日志量口径不同。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 8,
+          "y": 73,
+          "i": "automq-s3-object-size"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(state) (kafka_stream_s3_object_size_bytes{job=\"$cluster_id\"})",
+            "legend": "{{state}}",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "bytesIEC"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-backpressure",
+        "type": "timeseries",
+        "name": "AutoMQ 背压与慢 Broker",
+        "description": "背压状态或 slow broker 数量非零表示写入/读取路径正在被限流或节点响应异常。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 16,
+          "y": 73,
+          "i": "automq-backpressure"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "max(kafka_stream_back_pressure_state{job=\"$cluster_id\"})",
+            "legend": "背压状态",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "max(kafka_stream_slow_broker_count{job=\"$cluster_id\"})",
+            "legend": "慢 Broker",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "none"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "row-runtime",
+        "type": "row",
+        "name": "五、KRaft、JVM、宿主机与采集器",
+        "collapsed": true,
+        "layout": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 82,
+          "i": "row-runtime",
+          "isResizable": false
+        },
+        "targets": [],
+        "options": {},
+        "custom": {},
+        "overrides": [],
+        "transformationsNG": []
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-kraft",
+        "type": "timeseries",
+        "name": "KRaft Leader / Epoch / High Watermark",
+        "description": "KRaft 控制面 Leader、epoch 和高水位。Leader 为 -1 或高水位长时间不推进表示元数据仲裁异常。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 0,
+          "y": 83,
+          "i": "automq-kraft"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "max(kafka_server_kraft_current_leader{job=\"$cluster_id\"})",
+            "legend": "Leader",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "max(kafka_server_kraft_current_epoch{job=\"$cluster_id\"})",
+            "legend": "Epoch",
+            "instant": false
+          },
+          {
+            "refId": "C",
+            "expr": "max(kafka_server_kraft_high_watermark{job=\"$cluster_id\"})",
+            "legend": "High watermark",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "none"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-kraft-latency",
+        "type": "timeseries",
+        "name": "KRaft 提交延迟",
+        "description": "控制面 Raft 日志提交平均值与最大值。单节点仍需关注磁盘或线程阻塞造成的尖峰。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 8,
+          "y": 83,
+          "i": "automq-kraft-latency"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "max(kafka_server_kraft_commit_latency_avg_milliseconds{job=\"$cluster_id\"})",
+            "legend": "平均",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "max(kafka_server_kraft_commit_latency_max_milliseconds{job=\"$cluster_id\"})",
+            "legend": "最大",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "ms"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-event-queue",
+        "type": "timeseries",
+        "name": "Controller 事件队列 P99",
+        "description": "控制器事件排队和处理第 99 百分位耗时；排队高而处理低通常是线程繁忙，二者都高需查资源与存储。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 16,
+          "y": 83,
+          "i": "automq-event-queue"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "max(kafka_event_queue_time_99p_milliseconds{job=\"$cluster_id\"})",
+            "legend": "排队",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "max(kafka_event_queue_processing_time_99p_milliseconds{job=\"$cluster_id\"})",
+            "legend": "处理",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "ms"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-jvm-memory",
+        "type": "timeseries",
+        "name": "JVM 内存使用",
+        "description": "JVM 各内存池使用量。显式 Heap/Direct 之外还需为 native、线程栈、ZGC 和网络缓冲保留空间。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 0,
+          "y": 92,
+          "i": "automq-jvm-memory"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(area,type) (jvm_memory_used_bytes{job=\"$cluster_id\"})",
+            "legend": "{{area}} / {{type}}",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "bytesIEC"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-jvm-cpu-gc",
+        "type": "timeseries",
+        "name": "JVM CPU 与 GC",
+        "description": "进程 CPU 利用率和平均 GC 停顿。GC 持续升高时结合内存占用与宿主机压力判断。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 8,
+          "y": 92,
+          "i": "automq-jvm-cpu-gc"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "max(jvm_cpu_recent_utilization_ratio{job=\"$cluster_id\"})",
+            "legend": "CPU",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "sum(rate(jvm_gc_duration_seconds_sum{job=\"$cluster_id\"}[$__rate_interval])) / clamp_min(sum(rate(jvm_gc_duration_seconds_count{job=\"$cluster_id\"}[$__rate_interval])),1)",
+            "legend": "平均 GC 秒",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "none"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-host",
+        "type": "timeseries",
+        "name": "AutoMQ 宿主机 CPU / 内存使用率",
+        "description": "只匹配 automq_host=true 的 node-exporter，避免把其他节点资源混入。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 8,
+          "x": 16,
+          "y": 92,
+          "i": "automq-host"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "1 - avg(rate(node_cpu_seconds_total{automq_host=\"true\",mode=\"idle\"}[$__rate_interval]))",
+            "legend": "CPU",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "1 - (node_memory_MemAvailable_bytes{automq_host=\"true\"} / node_memory_MemTotal_bytes{automq_host=\"true\"})",
+            "legend": "内存",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              },
+              {
+                "color": "#FADE2A",
+                "value": 0.8
+              },
+              {
+                "color": "#F2495C",
+                "value": 0.9
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "percentUnit"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-vmagent-health",
+        "type": "timeseries",
+        "name": "vmagent 抓取与 Remote Write 健康",
+        "description": "抓取失败或 Remote Write 待发送数据持续增长时，夜莺看到的曲线可能滞后，不能误判为被监控服务无流量。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 101,
+          "i": "automq-vmagent-health"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by(job) (rate(vm_promscrape_scrapes_failed_total{job=\"automq-vmagent\"}[$__rate_interval]))",
+            "legend": "抓取失败 {{job}}",
+            "instant": false
+          },
+          {
+            "refId": "B",
+            "expr": "sum(vmagent_remotewrite_pending_data_bytes{job=\"automq-vmagent\"})",
+            "legend": "Remote Write 待发送字节",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "none"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
+        "maxPerRow": 4,
+        "datasourceCate": "prometheus",
+        "datasourceValue": "${datasource}"
+      },
+      {
+        "version": "3.4.0",
+        "id": "automq-jvm-threads",
+        "type": "timeseries",
+        "name": "JVM 线程数",
+        "description": "AutoMQ JVM 当前平台线程数。持续单向增长可能表示线程泄漏或连接/任务堆积。",
+        "links": [],
+        "layout": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 101,
+          "i": "automq-jvm-threads"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "max(jvm_thread_count{job=\"$cluster_id\"})",
+            "legend": "Threads",
+            "instant": false
+          }
+        ],
+        "options": {
+          "valueMappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "style": "line",
+            "steps": [
+              {
+                "color": "#73BF69",
+                "value": null,
+                "type": "base"
+              }
+            ]
+          },
+          "standardOptions": {
+            "unit": "none"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "all",
+            "sort": "desc"
+          }
+        },
+        "custom": {
+          "version": "3.4.0",
+          "drawStyle": "lines",
+          "lineInterpolation": "linear",
+          "lineWidth": 2,
+          "fillOpacity": 0.18,
+          "gradientMode": "none",
+          "showPoints": "never",
+          "scaleDistribution": {
+            "type": "linear"
+          },
+          "stack": "off"
+        },
+        "overrides": [],
+        "transformationsNG": [],
         "maxPerRow": 4,
         "datasourceCate": "prometheus",
         "datasourceValue": "${datasource}"
