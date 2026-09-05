@@ -204,8 +204,14 @@ CPU告警均可产生并恢复。
   新 Pod 必须从同一 ledger 继续排空。
 - Consumer watchdog 先检查 Gateway，再检查 VVG；同一 group 的多个 consumer 并行
   执行 120 秒优雅重启。禁止让影子 VVG 的串行停止窗口阻塞正式 Gateway 的恢复。
+  watchdog 只读取本机 `automq` project，使用 group state 中的成员数；只有连续两次
+  成功查询均为 `Empty / 0` 才重启。Kafka 查询失败、未知输出、零成员 rebalance 和
+  Broker 不健康都打断计数，不能把不可观测状态当成消费者退出。各 group 查询超时有界，
+  一条链路的查询错误不会中止另一条链路的检查；`.env` 不再作为 shell 执行。
 - Broker 健康不能只验证 Kafka API 端口；combined KRaft 重启时端口可能先于业务
   partition leader 就绪。健康检查必须同时确认两个业务 Topic 均无 `Leader: -1`。
+  空集群首次启动时 bootstrap 只等待已认证 API 后建 Topic，消费者再等待 Topic-aware
+  health 和 bootstrap 成功；bootstrap 不能反过来依赖 Topic-aware health。
 - 6 GiB 容器内把 Heap、Direct、WAL 和 Block 按比例放大，在真实 Gateway 主切和 VVG
   积压追赶中两次触发 cgroup OOM。最终保留 3 CPU/6 GiB cgroup，但恢复官方 Tiny 内存
   参数，为 native、线程栈、ZGC、网络和冷读瞬时内存保留约 3 GiB；不得只按各显式
@@ -216,3 +222,7 @@ CPU告警均可产生并恢复。
   单行上限。解析后超过 4 MiB时直写 ClickHouse fallback，且凭据来自 Kubernetes Secret。
 - 生成清单的多行 VRL/命令必须使用 YAML `|` block scalar，并把配置 SHA-256 放入
   Pod annotation，保证可读且 ConfigMap 变化会触发受控滚动。
+- VVG producer 的输入必须继承现场 `sinks.victorialogs.inputs`，保留现场追加的解析、
+  过滤、脱敏步骤和辅助 sink，不能写死为公开示例中的 `add_msg_field`。空 inputs 直接
+  拒绝生成。CI 对 VVG/Gateway 的 shadow/production 四种生成结果都执行真实 Vector
+  配置编译，包括 VRL、Secret 和固定 GeoIP 数据库；YAML 能解析不代表配置可运行。

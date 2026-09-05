@@ -171,9 +171,12 @@ def render_vector_config(source: str, pipeline: str, mode: str) -> str:
         direct_sink = copy.deepcopy(sinks.get("victorialogs"))
         if not direct_sink:
             raise SystemExit("VVG source must contain sinks.victorialogs")
+        direct_inputs = direct_sink.get("inputs", [])
+        if not direct_inputs:
+            raise SystemExit("VVG VictoriaLogs sink must have at least one input")
         transforms["prepare_automq_event"] = {
             "type": "remap",
-            "inputs": ["add_msg_field"],
+            "inputs": copy.deepcopy(direct_inputs),
             "source": BlockString(
                 "._automq_event_timestamp = format_timestamp!(.timestamp, \"%+\")\n"
                 "namespace = string(.kubernetes.pod_namespace) ?? \"unknown\"\n"
@@ -234,7 +237,7 @@ def render_vector_config(source: str, pipeline: str, mode: str) -> str:
         ]
         direct_sink["tenant_id"] = "${VLS_TENANT_ID}"
         direct_sink["acknowledgements"] = {"enabled": True}
-        sinks.clear()
+        del sinks["victorialogs"]
         sinks["automq_lane_a"] = kafka_sink(
             ["route_automq_producer_lane.lane_a"], 5368709120
         )

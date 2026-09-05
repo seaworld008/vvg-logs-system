@@ -14,6 +14,12 @@ for topic in "${VVG_TOPIC}" "${GATEWAY_TOPIC}"; do
     --command-config "${client_config}" \
     --describe \
     --topic "${topic}" 2>/dev/null)"
-  [[ -n "${description}" ]]
-  ! grep -Eq 'Leader: (-1|none)' <<<"${description}"
+  # A summary or warning alone is not evidence of any usable partition.
+  awk '
+    /Partition:[[:space:]]+[0-9]+/ {
+      partitions++
+      if ($0 !~ /Leader:[[:space:]]+[0-9]+([[:space:]]|$)/) bad = 1
+    }
+    END {exit (partitions == 0 || bad)}
+  ' <<<"${description}"
 done

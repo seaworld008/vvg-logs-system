@@ -1,5 +1,6 @@
 x-vector-common: &vector-common
   image: ${VECTOR_IMAGE}
+  pull_policy: never
   restart: always
   stop_grace_period: 2m
   read_only: true

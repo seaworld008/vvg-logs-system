@@ -72,8 +72,20 @@ docker compose --env-file .env --profile shadow up -d
 ```
 
 `automq-init` 只在空 KRaft 目录执行 format，并把 admin SCRAM 用户写入 metadata。
-`automq-bootstrap` 幂等创建其余用户、ACL 和两个 Topic。正式消费者使用单独的
-consumer group 与 state 目录：
+`automq-bootstrap` 幂等创建其余用户、ACL 和两个 Topic。首次启动时，它在 Broker
+容器启动后自行等待已认证 Kafka API（每次最多 10 秒、最多 30 次、重试间隔 5 秒），
+再创建 Topic。Broker 健康检查仍要求两个 Topic 存在实际分区且所有 leader 就绪；
+消费者同时等待 bootstrap 成功和 Broker healthy。不能让 bootstrap 等待这个包含
+Topic 的健康检查，否则空集群会循环等待。
+
+consumer watchdog 仅管理本机 Compose project `automq` 的消费者。它通过 Kafka
+`--describe --state` 查询成员数，连续两次确认 `Empty / 0` 才优雅重启对应 group；
+查询失败、输出无法识别、零成员 rebalance 或 Broker 不健康会清除连续计数，并继续
+检查另一条链路。`.env` 只读取影子 group 名，沿用示例的独立 `KEY=value` 行（可加一对
+引号，不使用 `export`、行内注释或变量展开），不能作为 shell 执行。远端三个 VVG
+实例不在这个本机 watchdog 的管理范围，应通过监控和目标机的独立恢复流程处理。
+
+正式消费者使用单独的 consumer group 与 state 目录：
 
 ```bash
 docker compose --env-file .env --profile shadow stop \
@@ -96,6 +108,9 @@ docker compose --env-file .env --profile production up -d \
 减少解压后日志的跨机传输。复制 `vvg-consumers.env.example` 为目标机本地 `.env`，填入
 已验证的镜像 digest、VPC 内 Kafka 地址和 VictoriaLogs 地址；`.env` 与 SCRAM password
 必须保持 `0600` 且不得进入 Git。
+
+远端 Compose 同样使用 `pull_policy: never`；启动前必须已在目标机加载并验证精确
+digest 对应的镜像，不能依赖首次启动联网拉取。
 
 三个服务使用同一 production consumer group，但分别使用独立 state 目录和 metrics
 端口。迁移时每次只启动一个新实例，确认 group rebalance、事件收发和错误计数后，再
