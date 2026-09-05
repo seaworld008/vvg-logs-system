@@ -80,7 +80,7 @@ services:
         - CMD-SHELL
         - /opt/automq-deploy/healthcheck-kafka.sh
       interval: 10s
-      timeout: 35s
+      timeout: 45s
       retries: 18
       start_period: 5m
     security_opt:
@@ -93,7 +93,7 @@ services:
     read_only: true
     depends_on:
       automq:
-        condition: service_healthy
+        condition: service_started
     environment:
       VVG_TOPIC: ${VVG_TOPIC}
       GATEWAY_TOPIC: ${GATEWAY_TOPIC}
@@ -113,6 +113,8 @@ services:
     profiles: ["shadow"]
     scale: 3
     depends_on:
+      automq:
+        condition: service_healthy
       automq-bootstrap:
         condition: service_completed_successfully
     environment:
@@ -137,6 +139,8 @@ services:
     profiles: ["shadow"]
     container_name: automq-vector-gateway-shadow
     depends_on:
+      automq:
+        condition: service_healthy
       automq-bootstrap:
         condition: service_completed_successfully
     environment:
@@ -163,6 +167,8 @@ services:
     profiles: ["production"]
     scale: 3
     depends_on:
+      automq:
+        condition: service_healthy
       automq-bootstrap:
         condition: service_completed_successfully
     environment:
@@ -187,6 +193,8 @@ services:
     profiles: ["production"]
     container_name: automq-vector-gateway-production
     depends_on:
+      automq:
+        condition: service_healthy
       automq-bootstrap:
         condition: service_completed_successfully
     environment:

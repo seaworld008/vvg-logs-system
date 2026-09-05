@@ -207,8 +207,11 @@ PY
   else
     fail "Consumer watchdog must check Gateway before VVG"
   fi
-  require_literal "${root}/scripts/healthcheck-kafka.sh" "! grep -Eq 'Leader: (-1|none)'" \
-    "Broker health requires both business topics to have leaders"
+  if PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v; then
+    pass "AutoMQ startup, recovery and manifest behavior regressions pass"
+  else
+    fail "AutoMQ behavior regressions failed"
+  fi
   require_literal "${compose}" 'start_period: 5m' \
     "Broker health allows combined KRaft to recover topic leaders"
   require_literal "${root}/config/automq-consumer-watchdog.timer" 'OnUnitActiveSec=30s' \
@@ -471,11 +474,23 @@ validate_runtime() {
   }
   temp_dir="$(mktemp -d)"
   trap 'rm -rf -- "${temp_dir}"' RETURN
+  mkdir -p "${temp_dir}/producer-secrets"
+  printf 'validation-user' > "${temp_dir}/producer-secrets/username"
+  printf 'validation-password' > "${temp_dir}/producer-secrets/password"
   for pipeline in vvg gateway; do
     if [[ "${pipeline}" == vvg ]]; then
       source_manifest="k8s-deployment/vector/vvg/direct-containerd.yaml"
     else
       source_manifest="k8s-deployment/vector/gateway/direct-containerd.yaml"
+      local geoip_path expected_geoip
+      geoip_path="${GATEWAY_GEOIP_MMDB:-${temp_dir}/dbip-city-lite-2026-09.mmdb}"
+      expected_geoip="05a10861259c7966cb54d7181ef8c360de8c8829d182098c0e62a9b7d54cd50d"
+      if [[ ! -f "${geoip_path}" ]]; then
+        curl -L --fail --retry 5 --retry-all-errors --connect-timeout 30 --max-time 900 \
+          -o "${geoip_path}" \
+          https://github.com/seaworld008/vvg-logs-system/releases/download/geoip-dbip-city-lite-2026-09/dbip-city-lite-2026-09.mmdb
+      fi
+      echo "${expected_geoip}  ${geoip_path}" | sha256sum -c -
     fi
     for rollout_mode in shadow production; do
       rendered="${temp_dir}/${pipeline}-${rollout_mode}.yaml"
@@ -538,7 +553,32 @@ else:
             for volume in ds["spec"]["template"]["spec"]["volumes"]
         )
 print(f"PASS: rendered {pipeline} {mode} producer manifest")
+with open(path + ".vector.yaml", "w", encoding="utf-8") as output:
+    output.write(configmaps[0]["data"]["vector.yaml"])
 PY
+      local -a geoip_mounts=()
+      if [[ "${pipeline}" == gateway ]]; then
+        geoip_mounts=(
+          -v "${geoip_path}:/var/lib/vector/geoip/dbip-city-lite-2026-09.mmdb:ro"
+          -v "${geoip_path}:/var/lib/vector-geoip/geoip/dbip-city-lite-2026-09.mmdb:ro"
+        )
+      fi
+      docker run --rm \
+        -e VLS_ENDPOINT=http://victorialogs.example:9428 \
+        -e VLS_TENANT_ID=99:99 \
+        -e VECTOR_SELF_NODE_NAME=validation-node \
+        -e HOSTNAME=validation-node \
+        -e VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION=true \
+        -e AUTOMQ_BOOTSTRAP_SERVERS=automq.example:9092 \
+        -e "AUTOMQ_TOPIC=${pipeline}.validation" \
+        -e "AUTOMQ_PRODUCER_USERNAME=${pipeline}-producer" \
+        -v "${rendered}.vector.yaml:/etc/vector/vector.yaml:ro" \
+        -v "${temp_dir}/producer-secrets:/var/run/secrets/automq:ro" \
+        -v "${temp_dir}/producer-secrets:/var/run/secrets/clickhouse:ro" \
+        "${geoip_mounts[@]}" \
+        timberio/vector:0.58.0-alpine \
+        validate --no-environment /etc/vector/vector.yaml
+      pass "Rendered ${pipeline} ${rollout_mode} producer compiles with Vector 0.58.0"
     done
   done
   rm -rf -- "${temp_dir}"

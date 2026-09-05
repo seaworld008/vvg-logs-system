@@ -5,6 +5,21 @@ bin=/opt/automq/kafka/bin
 bootstrap=automq:19092
 admin_config=/etc/automq/admin-client.properties
 
+# Topic-aware health cannot succeed until this bootstrap has created the topics.
+# Wait for the authenticated API here, with a bounded startup window.
+for attempt in {1..30}; do
+  if timeout 10 "${bin}/kafka-broker-api-versions.sh" \
+      --bootstrap-server "${bootstrap}" --command-config "${admin_config}" \
+      >/dev/null 2>&1; then
+    break
+  fi
+  if [[ "${attempt}" -eq 30 ]]; then
+    printf 'Kafka API did not become ready; bootstrap aborted without changes\n' >&2
+    exit 1
+  fi
+  sleep 5
+done
+
 create_scram_user() {
   local user="$1"
   local password_file="$2"
