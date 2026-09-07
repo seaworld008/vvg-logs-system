@@ -705,6 +705,20 @@
         "type": "textbox"
       },
       {
+        "name": "Filters",
+        "label": "Filters",
+        "type": "adhoc",
+        "datasource": {
+          "type": "victoriametrics-logs-datasource",
+          "uid": "victorialogs-ds"
+        },
+        "filters": [],
+        "baseFilters": [],
+        "allowCustomValue": true,
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
         "current": {
           "selected": false,
           "text": "*",
@@ -760,6 +774,6 @@
   "timezone": "browser",
   "title": "VVG 生产日志检索大屏",
   "uid": "vvg-log-search",
-  "version": 17,
+  "version": 18,
   "weekStart": "monday"
 }

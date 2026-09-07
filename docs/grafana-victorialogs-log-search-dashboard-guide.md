@@ -102,6 +102,14 @@ curl -fsS http://127.0.0.1:9428/select/logsql/stream_field_values \
 container:in(*) pod:in(*) level:in(*)
 ```
 
+顶部固定保留 Grafana 原生 `Filters`（ad hoc）变量，绑定 `victorialogs-ds`，默认没有
+筛选条件。它与日志详情中“Filter for value / Filter out value”使用同一个原生控件，
+可筛选 `file` 等日志字段；不需要先点击日志详情加号才出现，清空条件后仍然显示。
+字段条件由数据源插件自动应用于使用该数据源的面板，不拼接额外 raw 表达式。
+Filters 随 URL 恢复；它与 message 多条件面板独立，使用自身的清空操作移除字段条件。
+
+![顶部原生 Filters 控件，业务日志已裁去](images/vvg-native-filters-bar.png)
+
 ### 4.2 可折叠区域
 
 - `日志概览与趋势`：左侧包含按级别堆叠趋势图，右侧上下包含匹配日志数和错误/严重日志数。

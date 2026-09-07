@@ -442,8 +442,19 @@ const variable = (name, value) => ({
   type: "textbox",
 });
 dashboard.templating.list = dashboard.templating.list.filter(
-  ({ name }) => name !== "message_filter_expr" && name !== "message_filter_state",
+  ({ name }) => !["message_filter_expr", "message_filter_state", "Filters"].includes(name),
 );
+dashboard.templating.list.push({
+  name: "Filters",
+  label: "Filters",
+  type: "adhoc",
+  datasource: { type: "victoriametrics-logs-datasource", uid: "victorialogs-ds" },
+  filters: [],
+  baseFilters: [],
+  allowCustomValue: true,
+  hide: 0,
+  skipUrlSync: false,
+});
 dashboard.templating.list.push(variable("message_filter_expr", "*"));
 dashboard.templating.list.push(variable("message_filter_state", emptyState));
 const compactVariableLabels = new Map([
@@ -532,9 +543,9 @@ for (const item of dashboard.panels) {
     }
   }
 }
-dashboard.version = 17;
+dashboard.version = 18;
 
 await mkdir(dirname(panelPath), { recursive: true });
 await writeFile(panelPath, `${JSON.stringify(panel, null, 2)}\n`, "utf8");
 await writeFile(dashboardPath, `${JSON.stringify(dashboard, null, 2)}\n`, "utf8");
-console.log("Rendered Business Text message filter and VVG log search dashboard version 17");
+console.log("Rendered Business Text message filter and VVG log search dashboard version 18");

@@ -103,7 +103,15 @@ assert.throws(
   /高级过滤只允许 LogsQL 过滤条件/,
 );
 
-assert.equal(dashboard.version, 17);
+assert.equal(dashboard.version, 18);
+const nativeFilters = dashboard.templating.list.filter(({name}) => name === "Filters");
+assert.equal(nativeFilters.length, 1);
+assert.equal(nativeFilters[0].type, "adhoc");
+assert.equal(nativeFilters[0].hide, 0);
+assert.equal(nativeFilters[0].datasource.uid, "victorialogs-ds");
+assert.deepEqual(nativeFilters[0].filters, []);
+assert.deepEqual(nativeFilters[0].baseFilters, []);
+assert.equal(nativeFilters[0].skipUrlSync, false);
 const dashboardPanel = dashboard.panels.find(({ id }) => id === panelTemplate.id);
 assert.ok(dashboardPanel, "dashboard must embed the message filter panel");
 assert.deepEqual(dashboardPanel.options, panelTemplate.options);
