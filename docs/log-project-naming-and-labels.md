@@ -64,6 +64,14 @@ Loki JSON 编码入库；其余结构化标签和真实时间保留。最终存�
 `labels.message`，与 CCE 的排查体验保持一致。复制只发生在最多 500 行的明细返回中，
 趋势和统计不增加此字段；AutoMQ 和 VictoriaLogs 持久化均不存两份正文。
 
+主机项目 consumer 的 Loki sink 使用 `remove_label_fields: true`：先生成原有流标签，
+再从 JSON 载荷移除已经用于标签的字段。字段继续随 Loki stream 发送，VictoriaLogs
+查询仍返回它们；流标签、`_stream_id`、正文与大屏兼容别名不变。它节省消费者到
+VictoriaLogs 的重复编码与传输，不改变 Kafka 事件，也不减少 `_stream` 的展示。
+CCE/Gateway 的 consumer 不随主机路线修改。回归入口
+`scripts/test-host-consumer-labels.py` 对比真实 Vector 载荷，并通过隔离 VictoriaLogs
+确认前后字段、时间、流 ID、长正文及 file 查询相同；不以合成样本比例承诺实际压缩收益。
+
 不能只验证行数或 HTTP 成功：每种日志格式至少抽样核对 `_msg` 等于脱敏后的原正文，
 包含换行的正常长日志完整，`missing _msg field` 不出现在新记录中，message 条件查询
 能命中同一条记录。某些 Loki JSON 自动解析路径不会把 `message` 自动指定为正文。

@@ -109,6 +109,19 @@ container:in(*) pod:in(*) level:in(*)
 字段条件由数据源插件自动应用于使用该数据源的面板，不拼接额外 raw 表达式。
 Filters 随 URL 恢复；它与 message 多条件面板独立，使用自身的清空操作移除字段条件。
 
+原生 Filters 的等值条件增加显示高亮：`message/_msg` 在日志正文中高亮，`file` 等
+普通字段在展开的日志详情对应字段值中高亮。不会把文件路径强塞进正文或改写返回
+JSON，也不增加后端查询。排除与正则条件只执行原有筛选，不作字面高亮。
+
+显示实现位于 `scripts/lib/native-filter-highlight.mjs`，由 Dashboard 生成器注入现有
+Business Text 面板，使用浏览器 CSS Highlight API，不修改日志 DOM 文本。只扫描
+日志明细面板，支持跨语法着色节点的文字；每次最多扫描 100 万字符、创建 2000 个
+范围，最多处理 32 个等值条件和每值 4096 字符。超出预算的文本仍正常显示与筛选。
+不支持该浏览器 API 时保留正常查询。虚拟列表/详情变化后更新范围，清空条件、切页
+和面板卸载时清理高亮及监听器。Grafana 升级时必须重新验证原生字段行结构。
+
+![字段值高亮局部，仅保留通用路径前缀](images/vvg-native-filter-highlight.jpg)
+
 ![顶部原生 Filters 控件，业务日志已裁去](images/vvg-native-filters-bar.png)
 
 ### 4.2 可折叠区域

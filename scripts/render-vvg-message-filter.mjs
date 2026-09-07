@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { nativeFilterHighlightScript } from "./lib/native-filter-highlight.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const dashboardPath = resolve(root, "docker-compose/grafana/dashboards/vvg-log-search.json");
@@ -174,10 +175,12 @@ function buildVvgMessageFilter(logic, conditions, advanced = "*") {
 // VVG_BUILDER_END
 
 const EMPTY_STATE = "${emptyState}";
+${nativeFilterHighlightScript}
 const host = context.element.matches && context.element.matches(".vvg-message-filter")
   ? context.element
   : context.element.querySelector(".vvg-message-filter");
 if (!host) return;
+const disposeNativeHighlights = installNativeFiltersHighlighter(context, host);
 
 const rowsHost = host.querySelector(".vvg-filter-rows");
 const summary = host.querySelector(".vvg-filter-summary");
@@ -381,6 +384,7 @@ host.addEventListener("change", handleInput);
 render();
 
 return () => {
+  disposeNativeHighlights();
   host.removeEventListener("click", handleClick);
   host.removeEventListener("input", handleInput);
   host.removeEventListener("change", handleInput);
@@ -447,6 +451,7 @@ dashboard.templating.list = dashboard.templating.list.filter(
 dashboard.templating.list.push({
   name: "Filters",
   label: "Filters",
+  description: "等值条件在匹配位置高亮；message/_msg 高亮正文，file 等字段在展开详情中高亮。排除和正则条件只过滤，不着色。",
   type: "adhoc",
   datasource: { type: "victoriametrics-logs-datasource", uid: "victorialogs-ds" },
   filters: [],
@@ -543,9 +548,9 @@ for (const item of dashboard.panels) {
     }
   }
 }
-dashboard.version = 18;
+dashboard.version = 19;
 
 await mkdir(dirname(panelPath), { recursive: true });
 await writeFile(panelPath, `${JSON.stringify(panel, null, 2)}\n`, "utf8");
 await writeFile(dashboardPath, `${JSON.stringify(dashboard, null, 2)}\n`, "utf8");
-console.log("Rendered Business Text message filter and VVG log search dashboard version 18");
+console.log("Rendered Business Text message filter and VVG log search dashboard version 19");

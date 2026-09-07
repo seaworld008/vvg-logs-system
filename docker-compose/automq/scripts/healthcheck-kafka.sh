@@ -6,7 +6,8 @@ client_config=/etc/automq/admin-client.properties
 
 # Short-lived admin clients must not inherit the broker's 1-GiB heap and ZGC.
 export KAFKA_HEAP_OPTS='-Xms32m -Xmx128m'
-export KAFKA_JVM_PERFORMANCE_OPTS='-XX:+UseSerialGC -XX:ActiveProcessorCount=1'
+# Metadata probes are short-lived; avoid optimizing them with the C2 compiler.
+export KAFKA_JVM_PERFORMANCE_OPTS='-XX:+UseSerialGC -XX:ActiveProcessorCount=1 -XX:TieredStopAtLevel=1'
 
 for topic in "${VVG_TOPIC}" "${GATEWAY_TOPIC}"; do
   [[ "${topic}" =~ ^[A-Za-z0-9._-]+$ ]] || exit 1

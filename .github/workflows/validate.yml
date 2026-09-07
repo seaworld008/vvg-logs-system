@@ -35,3 +35,4 @@ jobs:
         run: |
           python -m unittest discover -s scripts/tests -p test_host_log_collector.py -v
           python scripts/test-host-log-runtime.py
+          python scripts/test-host-consumer-labels.py
