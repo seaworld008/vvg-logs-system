@@ -399,8 +399,8 @@ PY
     "Kafka producer stall detection requires three consecutive failures"
   require_literal "scripts/render-automq-vector-manifest.py" 'if ! nc -z -w 2' \
     "Kafka producer stall detector does not restart while the broker is unreachable"
-  require_literal "scripts/render-automq-vector-manifest.py" '[ "${queued}" -lt "${previous}" ]' \
-    "Kafka producer stall detector requires a high queue to drain"
+  require_literal "scripts/render-automq-vector-manifest.py" 'queued[id] >= old_queue[id] && rate < min_rate' \
+    "Kafka producer stall detector distinguishes per-lane low throughput from healthy backlog"
   require_literal "scripts/render-automq-vector-manifest.py" '"mountPath": "/opt/automq-health/producer-stall-check.sh"' \
     "Kafka producer stall detector is mounted as human-readable ConfigMap content"
   require_literal "scripts/render-automq-vector-manifest.py" '"linger.ms": "100"' \

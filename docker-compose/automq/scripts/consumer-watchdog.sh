@@ -45,7 +45,10 @@ check_group() {
     rm -f "${counter_file}"
     return
   fi
-  if ! description="$(timeout 20 docker exec automq timeout 15 \
+  if ! description="$(timeout 20 docker exec \
+      -e KAFKA_HEAP_OPTS='-Xms32m -Xmx128m' \
+      -e KAFKA_JVM_PERFORMANCE_OPTS='-XX:+UseSerialGC -XX:ActiveProcessorCount=1' \
+      automq timeout 15 \
       /opt/automq/kafka/bin/kafka-consumer-groups.sh \
       --bootstrap-server automq:19092 --command-config /etc/automq/admin-client.properties \
       --describe --state --group "${group}" 2>/dev/null)"; then
