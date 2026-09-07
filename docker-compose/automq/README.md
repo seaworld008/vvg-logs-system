@@ -83,6 +83,9 @@ watchdog 的 Kafka CLI 使用独立的 32/128 MiB Heap、SerialGC 和单逻辑 C
 不继承 Broker JVM 配置。共享宿主机负载及 producer 高峰误重启的排查、发布与验收见
 [共享宿主机负载运行手册](../../docs/shared-host-load-runbook.md)。
 
+两条链路的 collector/consumer 内存预算、长 Java 日志边界和恢复验收见
+[Vector 内存与恢复基线](../../docs/vector-memory-and-recovery-runbook.md)。
+
 consumer watchdog 仅管理本机 Compose project `automq` 的消费者。它通过 Kafka
 `--describe --state` 查询成员数，连续两次确认 `Empty / 0` 才优雅重启对应 group；
 查询失败、输出无法识别、零成员 rebalance 或 Broker 不健康会清除连续计数，并继续

@@ -333,8 +333,9 @@ def render_vector_config(source: str, pipeline: str, mode: str) -> str:
             "password": "SECRET[clickhouse_auth.password]",
         }
         fallback_sink["buffer"] = {
-            "type": "memory", "max_events": 100, "when_full": "block"
+            "type": "disk", "max_size": 1073741824, "when_full": "block"
         }
+        fallback_sink.setdefault("request", {})["concurrency"] = 1
         config.setdefault("secret", {})["clickhouse_auth"] = {
             "type": "directory",
             "path": "/var/run/secrets/clickhouse",
@@ -408,6 +409,7 @@ def render_daemonset(
         "AUTOMQ_STALL_BUFFER_THRESHOLD_BYTES",
         str(67108864 if pipeline == "vvg" else 1048576),
     )
+    set_env(vector, "AUTOMQ_STALL_MIN_SENT_BYTES_PER_SEC", str(65536 if pipeline == "vvg" else 8192))
     set_env(vector, "VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION", "true")
     if pipeline == "vvg":
         set_env(vector, "VLS_TENANT_ID", "99:99" if mode == "shadow" else "0:0")

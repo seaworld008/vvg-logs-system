@@ -88,13 +88,14 @@ sinks:
       timeout_secs: 1
     buffer:
       type: memory
-      max_events: 500
+      max_events: 64
       when_full: block
     compression: none
     healthcheck: false
     acknowledgements:
       enabled: true
     request:
+      concurrency: 2
       timeout_secs: 60
 
   metrics:

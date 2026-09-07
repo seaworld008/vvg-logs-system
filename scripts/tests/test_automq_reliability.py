@@ -311,6 +311,13 @@ class ProducerProgressTests(ShellFixture):
         self.assertEqual(self.tick([("a", 200000000, 400000000), ("b", 200000000, 100001000)]), 1)
         self.assertEqual(self.tick([("a", 300000000, 700000000), ("b", 300000000, 100001000)]), 1)
 
+    def test_gateway_progress_uses_its_lower_traffic_baseline(self):
+        self.env.update(AUTOMQ_STALL_BUFFER_THRESHOLD_BYTES="1048576",
+                        AUTOMQ_STALL_MIN_SENT_BYTES_PER_SEC="8192")
+        self.assertEqual(self.tick([("gateway", 2000000, 1000000)]), 0)
+        self.assertEqual(self.tick([("gateway", 3000000, 2000000)]), 0)
+        self.assertEqual(self.tick([("gateway", 4000000, 2001000)]), 1)
+
     def test_draining_queue_low_queue_and_counter_reset_are_healthy(self):
         self.assertEqual(self.tick([("a", 100000000, 100000000)]), 0)
         self.assertEqual(self.tick([("a", 90000000, 100000000)]), 0)
@@ -329,6 +336,38 @@ class ProducerProgressTests(ShellFixture):
 
 
 class ManifestTests(unittest.TestCase):
+    def test_normal_java_multiline_has_no_fixed_line_split(self):
+        for name in ("direct-containerd.yaml", "direct-docker.yaml", "automq-containerd-production.yaml"):
+            docs = yaml.safe_load_all((ROOT / "k8s-deployment/vector/vvg" / name).read_text())
+            cm = next(d for d in docs if d and d.get("kind") == "ConfigMap")
+            config = yaml.safe_load(cm["data"]["vector.yaml"])
+            self.assertNotIn("max_events", config["transforms"]["enhance_multiline"])
+            self.assertNotIn("end_every_period_ms", config["transforms"]["enhance_multiline"])
+            self.assertNotIn("split_vvg_large_event", config["transforms"])
+
+    def test_consumers_budget_worst_case_events_and_inflight_requests(self):
+        for pipeline, sink_name, count in (("vvg", "victorialogs", 64), ("gateway", "clickhouse", 16)):
+            cfg = yaml.safe_load((AUTOMQ / f"config/vector-{pipeline}-consumer.yaml").read_text())
+            sink = cfg["sinks"][sink_name]
+            self.assertEqual(sink["buffer"], {"type": "memory", "max_events": count, "when_full": "block"})
+            self.assertEqual(sink["request"]["concurrency"], 2)
+            self.assertTrue(sink["acknowledgements"]["enabled"])
+
+    def test_large_gateway_fallback_uses_durable_byte_bounded_queue(self):
+        docs = yaml.safe_load_all((ROOT / "k8s-deployment/vector/gateway/automq-containerd-production.yaml").read_text())
+        cm = next(d for d in docs if d and d.get("kind") == "ConfigMap")
+        sink = yaml.safe_load(cm["data"]["vector.yaml"])["sinks"]["clickhouse_oversized_fallback"]
+        self.assertEqual(sink["buffer"], {"type": "disk", "max_size": 1073741824, "when_full": "block"})
+        self.assertEqual(sink["request"]["concurrency"], 1)
+        self.assertEqual(sink["request"]["timeout_secs"], 180)
+
+    def test_pipeline_stall_rates_are_explicit_and_distinct(self):
+        for pipeline, expected in (("vvg", "65536"), ("gateway", "8192")):
+            docs = yaml.safe_load_all((ROOT / f"k8s-deployment/vector/{pipeline}/automq-containerd-production.yaml").read_text())
+            ds = next(d for d in docs if d and d.get("kind") == "DaemonSet")
+            env = {e["name"]: e.get("value") for e in ds["spec"]["template"]["spec"]["containers"][0]["env"]}
+            self.assertEqual(env["AUTOMQ_STALL_MIN_SENT_BYTES_PER_SEC"], expected)
+
     def test_native_producer_queues_are_bounded_behind_disk_backpressure(self):
         sink = renderer.kafka_sink(["events"], 5368709120)
         self.assertEqual(sink["librdkafka_options"]["queue.buffering.max.kbytes"], "65536")

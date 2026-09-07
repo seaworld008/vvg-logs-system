@@ -402,6 +402,8 @@ spec:
           value: '9598'
         - name: AUTOMQ_STALL_BUFFER_THRESHOLD_BYTES
           value: '67108864'
+        - name: AUTOMQ_STALL_MIN_SENT_BYTES_PER_SEC
+          value: '65536'
         - name: VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION
           value: 'true'
         - name: VLS_TENANT_ID
