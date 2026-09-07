@@ -30,6 +30,7 @@ config = {
 (work / "vector.yaml").write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
 PY
 docker run -d --name "${container}" --network none \
+  --user "$(id -u):$(id -g)" \
   --memory 256m --memory-swap 256m --cpus 0.5 \
   -v "${work_dir}:/work" "${VECTOR_IMAGE:-timberio/vector:0.58.0-alpine}" \
   --config /work/vector.yaml >/dev/null
