@@ -132,6 +132,7 @@ Kafka committed/end offset 的真实 lag、消费者内存、磁盘余量和后�
 ```bash
 python3 -m unittest discover -s scripts/tests -p test_host_log_collector.py -v
 python3 scripts/test-host-log-runtime.py
+python3 scripts/test-host-consumer-labels.py
 node scripts/render-vvg-message-filter.mjs
 node scripts/validate-vvg-message-filter.mjs
 bash scripts/validate-configs.sh --static

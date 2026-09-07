@@ -155,6 +155,7 @@ sys.exit(int(os.environ.get("KAFKA_EXIT", "0")))
         self.assertEqual(calls[0]["heap"], "-Xms32m -Xmx128m")
         self.assertIn("UseSerialGC", calls[0]["jvm"])
         self.assertIn("ActiveProcessorCount=1", calls[0]["jvm"])
+        self.assertIn("TieredStopAtLevel=1", calls[0]["jvm"])
         args = calls[0]["args"]
         self.assertIn("--command-config", args)
         self.assertEqual(args[args.index("--topic") + 1], r"^(vvg\.logs\.v1|gateway\.access\.v1)$")

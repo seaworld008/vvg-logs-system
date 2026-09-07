@@ -73,6 +73,16 @@ docker exec automq bash -c '
 首次修复的对照验证显示，单次探测 CPU 时间降低约七成。这个比例只描述管理探测，
 不代表日志吞吐提升七成；整机负载还取决于其他服务、流量和任务调度。
 
+后续对短时 Topic readiness 探测增加 `-XX:TieredStopAtLevel=1`，保留 SerialGC、
+单 CPU、128 MiB、认证及完整分区检查。交错实测中探测自身 CPU 时间减少约四分之一，
+wall time 接近；这不是整机负载改善比例，也不能保证消除所有告警。该参数仅作用于
+健康脚本启动的短时 CLI，不能复制到长期 Broker JVM。watchdog 频率与逻辑保持原值。
+
+评估迁移必须看目标的资源预算，不能仅看瞬时空闲：VictoriaLogs 8 GiB 与既有消费者
+6 GiB 的上限合计已为 14 GiB，不能再直接叠加 6 GiB Broker 或 8 GiB ClickHouse。
+Grafana/MCP 等轻量组件能迁移不代表能明显缓解 CPU/load。若告警窗口 CPU 仍有明显
+空闲、IO 等待低，应继续按进程、调度和探测成本定位，而非先搬迁大型有状态服务。
+
 ## 区分积压和 producer 卡死
 
 输入高于发送速度时，队列会增长，但 producer 可能仍在正常满速发送。只用“队列

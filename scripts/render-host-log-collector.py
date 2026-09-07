@@ -128,6 +128,7 @@ def render_consumer(project=None):
         'environment':'{{ environment }}', 'service':'{{ service }}', 'instance':'{{ instance }}',
         'namespace':'{{ namespace }}', 'container':'{{ container }}', 'pod':'{{ pod }}', 'level':'{{ level }}',
     }
+    cfg['sinks']['victorialogs']['remove_label_fields'] = True
     return cfg
 
 

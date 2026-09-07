@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { parseNativeHighlightFilters, installNativeFiltersHighlighter } from "./lib/native-filter-highlight.mjs";
 
 const dashboardPath = new URL(
   "../docker-compose/grafana/dashboards/vvg-log-search.json",
@@ -103,7 +104,16 @@ assert.throws(
   /高级过滤只允许 LogsQL 过滤条件/,
 );
 
-assert.equal(dashboard.version, 18);
+assert.equal(dashboard.version, 19);
+assert.deepEqual(parseNativeHighlightFilters(undefined), []);
+assert.deepEqual(parseNativeHighlightFilters(["", "broken", "|=|x", "file|!=|a", "file|=~|.*", "message|=|"]), []);
+assert.deepEqual(parseNativeHighlightFilters(["file|=|/logs/a.log", "file|=|/logs/a.log", "message|=|<script>|中文"]), [
+  { key: "file", text: "/logs/a.log" }, { key: "message", text: "<script>|中文" },
+]);
+assert.deepEqual(parseNativeHighlightFilters("file|=|" + "x".repeat(4097)), []);
+assert.equal(parseNativeHighlightFilters(Array.from({ length: 40 }, (_, i) => `file|=|${i}`)).length, 32);
+assert.doesNotThrow(() => installNativeFiltersHighlighter({}, {})());
+assert.match(panelTemplate.options.afterRender, /disposeNativeHighlights\(\)/);
 const nativeFilters = dashboard.templating.list.filter(({name}) => name === "Filters");
 assert.equal(nativeFilters.length, 1);
 assert.equal(nativeFilters[0].type, "adhoc");
