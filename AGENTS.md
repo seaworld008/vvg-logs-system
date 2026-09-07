@@ -74,6 +74,18 @@ Vector位于 `k8s-deployment/vector/gateway/`，Grafana可选配置位于
 - 四条 production链路由 `docs/log-pipeline-selection.md` 统一索引；直写清单是源，仓库 AutoMQ清单必须由 `scripts/render-automq-example-manifests.py` 生成并通过防漂移检查。
 - 本阶段不得停止或重建 `redis-v9`、`elk_redis`、Logstash、Kibana、Elasticsearch、VictoriaLogs、ClickHouse、Grafana或业务服务。
 
+## 主机 Java/PHP 迁移专区
+
+任务先读 `docker-compose/vector/host-automq/README.md`、`docs/host-log-format-rules.md`、
+`docs/log-project-naming-and-labels.md` 和 `docs/host-log-migration-lessons.md`。
+
+- Topic、group 和身份按项目隔离；网大APP和老教务PHP各一个消费者，不按服务拆分。
+- PHP 服务以 `php_` 开头；老教务后台/API 统一 `php_jxgl`，莆田后台/API 统一 `php_jxgl-ptlndx`。
+- runtime 先盘点用途，再递归采集确认的日志根目录；共享 NFS 文件指定一个采集所有者，禁止把缓存、会话或业务账号列表当日志。
+- `message` 在 Kafka 中是唯一正文；消费者转为 `_msg`，明细查询临时复制 `message`。不能只凭入库条数证明正文可搜索。
+- 首次 EOF 初始化只在采集器停止且明确接受丢失的迁移窗口执行；日常升级保留 source ID、fingerprint 和 state，禁止重置 checkpoint。
+- 本路线不修改 CCE 采集或 Nginx 日志，不顺带退役旧 ELK、Redis 和历史数据。
+
 ## Dashboard 修改
 
 `scripts/render-vvg-message-filter.mjs` 是 message 多条件面板和紧凑布局的源。不要分别手改面板模板与 Dashboard：
@@ -93,6 +105,10 @@ bash scripts/validate-clickhouse-gateway.sh --static
 ```
 
 多条件值只能由经过测试的构造函数生成 LogsQL，再通过 `${message_filter_expr:raw}` 插入。用户输入不得直接 raw 插值。编辑、添加、删除和切换 AND/OR 不得触发查询；只有 Apply 和 Reset 可以更新 Dashboard 变量。
+
+原生 `Filters` 是独立的可见 ad hoc 变量，固定绑定 `victorialogs-ds`，默认条件为空、URL 同步开启。
+清空后仍须显示，与日志详情加减号使用同一控件；不要复制自定义字段面板或再向查询拼接 raw 条件。
+仅更新 Dashboard 定义不重启 Grafana；验收字段条件同时影响明细、统计和 hits 趋势，并恢复零条件。
 
 ## 插件发布
 

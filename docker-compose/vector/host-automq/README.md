@@ -12,6 +12,7 @@ Java / PHP 文件 -> Vector file source -> logs.<环境>.<项目>.v1 -> 项目 c
 
 完整命名、分区、账号及标签约定见[日志项目规范](../../../docs/log-project-naming-and-labels.md)。
 原始格式、业务多行边界与目录排除见[主机日志格式规则](../../../docs/host-log-format-rules.md)。
+迁移验收、旧环境兼容和常见误判见[主机迁移与 Filters 实践](../../../docs/host-log-migration-lessons.md)。
 源清单明确记录旧索引、服务、文件路径、只读挂载和稳定 source ID。分类由
 `scripts/render-host-log-collector.py` 统一生成：
 
@@ -44,10 +45,10 @@ Java / PHP 文件 -> Vector file source -> logs.<环境>.<项目>.v1 -> 项目 c
   backups/
 ```
 
-消费者按项目使用独立目录和 Compose project，例如 `vector-wangda-app-consumer`，结构相同。若真实数据盘
-挂载在 `/datadisk`，可在该数据盘创建消费者目录，再通过 `/data/vector-host-consumer`
-软链接提供统一入口。正式项目消费者分别使用 `vector-wangda-app-consumer` 和
-`vector-legacy-php-consumer`，指标端口互不重叠。不要为了目录名称把新持久化放到空间不足的系统盘。
+消费者分别使用 `/data/vector-wangda-app-consumer/` 和 `/data/vector-legacy-php-consumer/`，
+Compose project 同样按项目独立，结构相同，指标端口互不重叠。若真实数据盘挂载在
+`/datadisk`，可在该数据盘分别创建目录，再以各自的 `/data/` 路径建立软链接。
+不要让两个消费者共用一个目录或 state，也不要为了目录名称把持久化放到空间不足的系统盘。
 
 正式镜像优先使用组织 Harbor 的精确 tag 与已验证 digest。启动前拉取并核对镜像 ID，
 正式启动不依赖在线下载。旧 Docker 或仓库 TLS/认证入口不兼容时，从受控发布主机
@@ -108,7 +109,7 @@ IdempotentWrite；消费者只获该 Topic 的 Read/Describe 和固定 group 的
 - 120 秒优雅停止；容器自身日志最多 `20 MiB x 3`。监控入口只绑定 loopback 或批准的内网。
 - Java/PHP 按日志头和 3 秒空闲超时合并，正常 9,000 行堆栈不按行数拆分。
 - 物理行超过 16 MiB 受 file source 上限约束。序列化正文超过 1,500,000 字节时显式
-  标记 `truncated`，保存原正文大小和脱敏正文摘要，并仅保留有界前段；不能宣称超大
+  标记 `truncated`，保存脱敏后、截断前的正文大小和摘要，并仅保留有界前段；不能宣称超大
   日志无损。截断不做采样，不影响其他正常事件。
 - Token、密码、认证头、手机号和身份证模式在 Kafka/OBS 持久化前脱敏。规则不能覆盖
   任意业务自定义秘密字段；新增格式时应补充测试并检查脱敏后样本。
