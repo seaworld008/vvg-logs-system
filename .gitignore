@@ -23,5 +23,13 @@ docker-compose/automq/state/
 docker-compose/automq/backups/
 docker-compose/automq/.env
 
+# Host collector deployment artifacts stay on the target machines
+docker-compose/vector/host-automq/state/
+docker-compose/vector/host-automq/secrets/
+docker-compose/vector/host-automq/backups/
+docker-compose/vector/host-automq/inventory.yaml
+docker-compose/vector/host-automq/image-lock.json
+**/__pycache__/
+
 # Local PR drafting artifact
 PR_BODY.md

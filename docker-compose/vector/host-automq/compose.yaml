@@ -1,0 +1,33 @@
+services:
+  vector:
+    image: ${VECTOR_IMAGE}
+    container_name: ${VECTOR_CONTAINER_NAME:-vector-host-logs}
+    restart: unless-stopped
+    stop_grace_period: 2m
+    user: "0:0"
+    read_only: true
+    command: ["--config", "/etc/vector/vector.yaml"]
+    environment:
+      VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION: "true"
+      AUTOMQ_BOOTSTRAP_SERVERS: ${AUTOMQ_BOOTSTRAP_SERVERS}
+      AUTOMQ_TOPIC: ${AUTOMQ_TOPIC}
+      AUTOMQ_USERNAME: ${AUTOMQ_USERNAME}
+      VECTOR_THREADS: "2"
+      TZ: Asia/Shanghai
+    volumes:
+      - ./config:/etc/vector:ro
+      - ./secrets:/run/secrets/kafka:ro
+      - ./state:/var/lib/vector
+    ports:
+      - "${METRICS_BIND_IP:-127.0.0.1}:${METRICS_PORT:-19610}:9598"
+    cpus: 1.0
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 256
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"

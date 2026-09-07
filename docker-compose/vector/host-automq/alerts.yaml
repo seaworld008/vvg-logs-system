@@ -1,0 +1,38 @@
+groups:
+  - name: project-log-pipelines
+    rules:
+      - alert: ProjectLogCollectorDown
+        expr: up{pipeline="host-vvg"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Project log collector or consumer is unavailable
+      - alert: ProjectLogDeliveryErrors
+        expr: sum by (project,instance,component_id) (increase(vector_component_errors_total{pipeline="host-vvg"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Project log pipeline has new errors
+      - alert: ProjectLogDiscarded
+        expr: sum by (project,instance,component_id) (increase(vector_component_discarded_events_total{pipeline="host-vvg",intentional!="true"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Project log events are being discarded
+      - alert: ProjectLogBufferHigh
+        expr: vector_buffer_size_bytes{pipeline="host-vvg",component_type="kafka"} > 1073741824
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Project collector has used over half its disk buffer
+      - alert: ProjectLogConsumerLagHigh
+        expr: sum by (project) (clamp_min(vector_kafka_consumer_lag{pipeline="host-vvg",partition_id!="-1"},0)) > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Project consumer backlog is growing

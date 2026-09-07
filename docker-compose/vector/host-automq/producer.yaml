@@ -1,0 +1,142 @@
+data_dir: /var/lib/vector
+timezone: Asia/Shanghai
+secret:
+  kafka_auth:
+    type: directory
+    path: /run/secrets/kafka
+sources:
+  internal_metrics:
+    type: internal_metrics
+transforms:
+  normalize:
+    type: remap
+    inputs: []
+    source: |
+      if !is_timestamp(.timestamp) {
+        .timestamp = parse_timestamp(to_string(.timestamp) ?? "", "%+") ?? now()
+      }
+      msg = string!(.message)
+      .time_source = "ingest"
+      .parse_status = "plain"
+      parsed, parse_error = parse_json(msg)
+      if parse_error == null && is_object(parsed) {
+        .parse_status = "json"
+        msg = to_string(parsed.message) ?? msg
+        .level = downcase(to_string(parsed.level) ?? to_string(parsed.log_level) ?? "unknown")
+        ts = to_string(parsed.timestamp) ?? to_string(parsed."@timestamp") ?? ""
+        parsed_time, time_error = parse_timestamp(ts, "%+")
+        if time_error == null {
+          .timestamp = parsed_time
+          .time_source = "event"
+        }
+        .logger = to_string(parsed.logger_name) ?? to_string(parsed.logger) ?? ""
+        .thread = to_string(parsed.thread_name) ?? to_string(parsed.thread) ?? ""
+      } else if .language == "java" {
+        # Legacy Logback pattern wrappers can contain unescaped quotes/newlines.
+        wrapped, wrapper_error = parse_regex(msg, r'(?s)^\{[ \t]*"message"[ \t]*:[ \t]*"(?P<body>.*)"[ \t]*\}[ \t]*$')
+        if wrapper_error == null {
+          msg = string!(wrapped.body)
+          .parse_status = "legacy_message_wrapper"
+        } else {
+          first_and_stack, stack_error = parse_regex(msg, r'(?s)^(?P<first>\{.*\})\n(?P<stack>.+)$')
+          if stack_error == null {
+            first = parse_json(string!(first_and_stack.first)) ?? {}
+            if is_string(first.message) {
+              msg = string!(first.message) + "\n" + string!(first_and_stack.stack)
+              .parse_status = "json_with_stack"
+            } else {
+              first_wrapper, first_error = parse_regex(string!(first_and_stack.first), r'(?s)^\{[ \t]*"message"[ \t]*:[ \t]*"(?P<body>.*)"[ \t]*\}[ \t]*$')
+              if first_error == null {
+                msg = string!(first_wrapper.body) + "\n" + string!(first_and_stack.stack)
+                .parse_status = "legacy_wrapper_with_stack"
+              }
+            }
+          }
+        }
+      }
+      msg = replace(msg, r'(?m)^[ \t]*[-=]{5,}[ \t]*\r?(?:\n|$)', "")
+      header, header_error = parse_regex(msg, r'^\s*\[?\s*(?P<ts>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:\d{2})?)')
+      if header_error == null {
+        ts = replace(string!(header.ts), ",", ".")
+        .timestamp = parse_timestamp(ts, "%+") ?? parse_timestamp(ts, "%Y-%m-%d %H:%M:%S%.f", timezone: "Asia/Shanghai") ?? .timestamp
+        .time_source = "event"
+      }
+      level_match, level_error = parse_regex(msg, r'(?i)(?:^|[\s\[])(?P<level>TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|CRITICAL|NOTICE)(?:[\s\]:]|$)')
+      if level_error == null && (!exists(.level) || .level == "unknown") { .level = downcase(string!(level_match.level)) }
+      if !exists(.level) { .level = "unknown" }
+      if .level == "warning" { .level = "warn" }
+      if .level == "fatal" { .level = "critical" }
+      if .level == "notice" { .level = "info" }
+      if .language == "php" {
+        if match(msg, r'(?i)\[[ \t]*(?:critical|fatal)[ \t]*\]') { .level = "critical" }
+        else if match(msg, r'(?i)\[[ \t]*error[ \t]*\]') { .level = "error" }
+        else if match(msg, r'(?i)\[[ \t]*(?:warn|warning)[ \t]*\]') { .level = "warn" }
+        else if match(msg, r'(?i)\[[ \t]*(?:info|log|notice)[ \t]*\]') { .level = "info" }
+        else if match(msg, r'(?i)\[[ \t]*(?:sql|debug)[ \t]*\]') { .level = "debug" }
+      }
+      # Redact before the Kafka disk buffer and OBS persistence.
+      msg = replace(msg, r'(?i)(?:authorization|cookie|set-cookie)\s*["\x27]?\s*[:=]\s*[^\r\n]+', "[REDACTED_AUTH]")
+      msg = replace(msg, r'(?i)(?:access_token|refresh_token|token|password|passwd|secret|api_key)\s*["\x27\x60]?\s*[:=]\s*["\x27]?[^\s,"\x27&}\r\n]+', "[REDACTED_SECRET]")
+      msg = replace(msg, r'(?is)<(?:access_token|refresh_token|token|password|secret|sign)>.*?</(?:access_token|refresh_token|token|password|secret|sign)>', "<redacted-secret>[REDACTED]</redacted-secret>")
+      msg = replace(msg, r'\b(?:86)?1[3-9]\d{9}\b', "[REDACTED_PHONE]")
+      msg = replace(msg, r'\b\d{17}[0-9Xx]\b', "[REDACTED_ID]")
+      .original_message_bytes = length(msg)
+      .truncated = false
+      if length(encode_json(msg)) > 1500000 {
+        .truncated = true
+        .message_sha256 = sha2(msg, variant: "SHA-256")
+        msg = truncate(msg, limit: 250000, suffix: " [TRUNCATED: see original_message_bytes/message_sha256]")
+      }
+      .message = msg
+      ._automq_event_timestamp = format_timestamp!(.timestamp, "%+")
+      ._automq_partition_key = string!(.project) + "/" + string!(.container) + "/" + string!(.pod) + "/" + string!(.source_id)
+      .schema_version = 1
+      del(.host)
+      del(.source_type)
+  drop_formatting_noise:
+    type: filter
+    inputs: [normalize]
+    condition: '!match(string!(.message), r''^\s*$'')'
+sinks:
+  automq:
+    type: kafka
+    inputs: [drop_formatting_noise]
+    bootstrap_servers: "${AUTOMQ_BOOTSTRAP_SERVERS}"
+    topic: "${AUTOMQ_TOPIC}"
+    key_field: _automq_partition_key
+    encoding:
+      codec: json
+    compression: zstd
+    sasl:
+      enabled: true
+      mechanism: SCRAM-SHA-512
+      username: "${AUTOMQ_USERNAME}"
+      password: SECRET[kafka_auth.password]
+    batch:
+      max_bytes: 1048576
+      max_events: 500
+      timeout_secs: 1
+    buffer:
+      type: disk
+      max_size: 2147483648
+      when_full: block
+    acknowledgements:
+      enabled: true
+    message_timeout_ms: 0
+    librdkafka_options:
+      enable.idempotence: "true"
+      request.required.acks: "-1"
+      queue.buffering.max.kbytes: "65536"
+      message.max.bytes: "4194304"
+      linger.ms: "100"
+      metadata.max.age.ms: "60000"
+      metadata.recovery.strategy: rebootstrap
+      metadata.recovery.rebootstrap.trigger.ms: "30000"
+      topic.metadata.refresh.sparse: "false"
+      reconnect.backoff.ms: "250"
+      reconnect.backoff.max.ms: "5000"
+      socket.keepalive.enable: "true"
+  metrics:
+    type: prometheus_exporter
+    inputs: [internal_metrics]
+    address: 0.0.0.0:9598

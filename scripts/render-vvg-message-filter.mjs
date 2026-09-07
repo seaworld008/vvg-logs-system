@@ -447,7 +447,7 @@ dashboard.templating.list = dashboard.templating.list.filter(
 dashboard.templating.list.push(variable("message_filter_expr", "*"));
 dashboard.templating.list.push(variable("message_filter_state", emptyState));
 const compactVariableLabels = new Map([
-  ["cluster", "集群"],
+  ["cluster", "集群或项目"],
   ["service", "服务"],
   ["message", "message"],
 ]);
@@ -455,6 +455,28 @@ dashboard.templating.list = dashboard.templating.list.map((item) => ({
   ...item,
   label: compactVariableLabels.get(item.name) ?? item.label,
 }));
+
+// Empty cluster is the existing CCE stream contract; projects have explicit labels.
+const scopes = JSON.parse(await readFile(resolve(root, "docker-compose/grafana/project-scopes.json"), "utf8"));
+const scopeOptions = scopes.map((scope, index) => {
+  if (!/^[a-z][a-z0-9-]{1,62}$/.test(scope.id) || typeof scope.name !== "string" || /[,:\n]/.test(scope.name)) {
+    throw new Error("Invalid project scope registry entry");
+  }
+  return { text: scope.name, value: scope.kind === "legacy-cluster" ? "^$" : `^${scope.id}$`, selected: index === 0 };
+});
+const clusterVariable = dashboard.templating.list.find(({ name }) => name === "cluster");
+Object.assign(clusterVariable, {
+  description: "CCE 兼容无 cluster 字段的既有日志；项目使用独立 cluster 标签。",
+  current: { selected: true, text: "生产 CCE", value: "^$" },
+  options: scopeOptions,
+  query: scopeOptions.map(({ text, value }) => `${text} : ${value}`).join(", "),
+});
+for (const item of dashboard.templating.list) {
+  if (item.type !== "query") continue;
+  item.query.query = `cluster:~$cluster ${item.query.query.replace(/^cluster:~\$cluster\s*/, "")}`;
+}
+dashboard.templating.list.find(({ name }) => name === "namespace").label = "命名空间/类型";
+dashboard.templating.list.find(({ name }) => name === "pod").label = "Pod/主机";
 
 const trendPanel = dashboard.panels.find(({ id }) => id === 3);
 if (!trendPanel) throw new Error("VVG log volume panel is missing");
@@ -504,11 +526,15 @@ for (const item of dashboard.panels) {
     target.expr = target.expr
       .replace(/ _msg:\$message(?: \$\{message_filter_expr:raw\})?/g, " _msg:$message")
       .replace(" _msg:$message", " _msg:$message ${message_filter_expr:raw}");
+    target.expr = `cluster:~$cluster ${target.expr.replace(/^cluster:~\$cluster\s*/, "")}`;
+    if (item.id === 4) {
+      target.expr = target.expr.replace(/ \| copy _msg as message$/, "") + " | copy _msg as message";
+    }
   }
 }
-dashboard.version = 15;
+dashboard.version = 17;
 
 await mkdir(dirname(panelPath), { recursive: true });
 await writeFile(panelPath, `${JSON.stringify(panel, null, 2)}\n`, "utf8");
 await writeFile(dashboardPath, `${JSON.stringify(dashboard, null, 2)}\n`, "utf8");
-console.log("Rendered Business Text message filter and VVG log search dashboard version 15");
+console.log("Rendered Business Text message filter and VVG log search dashboard version 17");
