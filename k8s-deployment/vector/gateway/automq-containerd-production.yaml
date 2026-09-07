@@ -268,7 +268,7 @@ data:
           enable.idempotence: 'true'
           max.in.flight.requests.per.connection: '5'
           message.max.bytes: '4194304'
-          queue.buffering.max.kbytes: '262144'
+          queue.buffering.max.kbytes: '65536'
           linger.ms: '100'
           metadata.max.age.ms: '60000'
           metadata.recovery.strategy: rebootstrap
@@ -396,7 +396,7 @@ spec:
       labels:
         app: vector-clickhouse-gateway
       annotations:
-        logs.example.com/vector-config-sha256: db00c0783bee25818301531477d716f355f88b6c7e9b98b9d128f39a9a528553
+        logs.example.com/vector-config-sha256: 838628de7c53e3dd622ade66947acb5da6dba5f6c952c010463b00d98dbbdadd
         logs.example.com/automq-mode: production
     spec:
       automountServiceAccountToken: false

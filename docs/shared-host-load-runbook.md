@@ -94,6 +94,48 @@ docker exec automq bash -c '
 Broker 不可达时清除历史且不重启 producer。指标无法读取或解析时不伪造零队列。
 Prometheus 文本解析兼容带 timestamp 和不带 timestamp 的样本。
 
+producer 除了磁盘 buffer，还有 librdkafka 内存队列。两个 lane 各允许 256 MiB 时，
+内存排队上限合计达到 512 MiB，尚未计入编码副本、压缩、source 和其他转换状态。
+Broker 断连时曾触发 2 GB producer 的 OOM。当前每个 Kafka sink 将
+`queue.buffering.max.kbytes` 限为 `65536`，双 lane 合计 128 MiB；继续保留总计 10 GiB
+disk/block、无限重试、ack、Zstd 和原批次。该调整限制驻留排队，不是吞吐限速；
+上线后仍需比较正常吞吐、恢复追赶速率和内存峰值，不能据此宣称绝不 OOM。
+
+## Broker 重建的恢复门禁
+
+重建已有 Broker 验证的是持久状态恢复，不等于空 Topic/空 KRaft 的首次部署验证。
+计划重建时备份配置、消费 offset 和容器基线，优雅停止后保存一致性 KRaft metadata，
+再用原精确镜像 `up -d --no-deps --force-recreate automq`。不执行空数据初始化，
+不删除 Topic、offset、OBS 或 producer checkpoint。
+
+Vector 0.58 客户端在 Broker 重建后曾停留在失效的 coordinator/leader 会话。必须分层
+验证，不能把 Broker healthy、consumer group Stable、有成员或 consumer 自报 lag=0
+当作全链路恢复。用认证后的 Kafka CLI 查询每个 production group 的 committed offset
+与 log end offset，并核对后端最新事件时间：
+
+```bash
+docker exec \
+  -e KAFKA_HEAP_OPTS='-Xms32m -Xmx128m' \
+  -e KAFKA_JVM_PERFORMANCE_OPTS='-XX:+UseSerialGC -XX:ActiveProcessorCount=1' \
+  automq timeout 20 /opt/automq/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server localhost:19092 \
+  --command-config /etc/automq/admin-client.properties \
+  --describe --group PRODUCTION_GROUP
+```
+
+Broker healthy 后若真实 lag 上升、committed offset 不动且后端时间不推进，按现场
+所有权恢复对应消费者。远端三个 VVG 实例不属于 Broker 主机的本地 watchdog：在其
+目标主机执行 `docker restart -t 120`；同组全部确认停滞时可并行优雅重启，避免逐个
+等待导致恢复窗口叠加。只恢复必要实例，检查 group 重平衡、offset 继续推进、lag 回落
+及下游最新时间。`AssignmentLost` 可能使已处理而未提交的消息重放，不能把重放
+误判为新流量，也不能仅凭 drop counter 没增长承诺整个 source 边界绝无丢失。
+
+producer liveness 仍保留低速停滞恢复。等待 120 秒优雅退出时，metrics/readiness
+可能暂时不可用；不要在原恢复尚未结束时叠加删除 Pod、复制活动 disk buffer 或多次重启。
+出现 OOM 时必须记录，而不能把自动重启后的 Running 状态描述成“全程零 OOM”。
+当前版本的 consumer 自动恢复仍有此边界，本地 Empty-group watchdog 不覆盖远端
+Stable-but-stalled group；计划维护必须包含上述主动恢复和验收步骤。
+
 ## 发布与验收
 
 先核对仓库修复是否已经进入现场活动配置。拉取最新 Git 不会自动更新服务器：检查
@@ -143,3 +185,4 @@ git diff --check
 [Kafka TopicCommand](https://github.com/apache/kafka/blob/3.9.1/tools/src/main/java/org/apache/kafka/tools/TopicCommand.java)、
 [Kafka consumer group 协议回退](https://github.com/apache/kafka/blob/3.9.1/clients/src/main/java/org/apache/kafka/clients/admin/internals/DescribeConsumerGroupsHandler.java)、
 [Vector Prometheus exporter](https://vector.dev/docs/reference/configuration/sinks/prometheus_exporter/)。
+producer 内存队列语义见 [librdkafka 配置](https://github.com/confluentinc/librdkafka/blob/v2.10.1/CONFIGURATION.md)。
