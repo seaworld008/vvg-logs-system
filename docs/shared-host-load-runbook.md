@@ -96,6 +96,14 @@ Prometheus 文本解析兼容带 timestamp 和不带 timestamp 的样本。
 
 ## 发布与验收
 
+先核对仓库修复是否已经进入现场活动配置。拉取最新 Git 不会自动更新服务器：检查
+`bootstrap-cluster.sh` 的有界认证 API 等待，确认 `automq-bootstrap` 依赖
+`service_started`，consumer 同时依赖 bootstrap 完成和 Broker Topic healthy。
+旧配置可能仍有“健康等待 Topic，bootstrap 又等待健康”的冷启动循环。同步修复时
+备份现场 Compose，只修改这两处依赖并结构化比对，使用目标机实际 Compose 展开；
+可以先发布脚本和启动配置，不执行 bootstrap，不修改已有 Topic/ACL，也不重建 Broker。
+冷启动回归测试通过不等于已经对生产集群执行了清空重建演练。
+
 Broker 的脚本目录是目录 bind mount。先备份脚本、Compose 和容器状态并验证 SHA，
 在同一目录原子替换脚本，随后执行认证健康检查；无需重启 Broker。单文件 bind mount
 不适用这个结论，必须检查实际挂载。
