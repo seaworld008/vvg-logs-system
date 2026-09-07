@@ -117,6 +117,12 @@ IdempotentWrite；消费者只获该 Topic 的 Read/Describe 和固定 group 的
 Kafka committed/end offset 的真实 lag、消费者内存、磁盘余量和后端最新业务时间。
 维护 Broker 后必须核对真实 offset 和后端新日志，不仅查看容器 Running。
 
+跨网段不允许中心拉取指标时，可在 inventory 设置 `metrics.mode: push`，并在 `.env`
+配置组织既有的 `METRICS_REMOTE_WRITE_URL`。Vector 每 15 秒通过 Prometheus Remote Write
+主动上报，使用有界独立 memory 队列，不改变日志的 Kafka disk buffer，也不增加消费者。
+按需设置 `metrics.instance/ident` 与已有主机监控身份对齐；中心删除这些主机重复且不可达
+的 scrape target。检查主动上报序列的时间新鲜度，不能把不再执行的拉取检查当作主机 down。
+
 ## 校验与回滚
 
 ```bash
