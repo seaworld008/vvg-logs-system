@@ -22,6 +22,12 @@
 漏掉同一容器内的临时 Java 管理进程。没有错误指标序列时记录“未暴露”，通过日志及
 其他计数交叉确认，不能把空查询自动当作零。
 
+Kafka request error 必须按 `type,error` 拆分。Kafka 3.9 的 AdminClient 会先尝试
+`ConsumerGroupDescribe`，收到 `UNSUPPORTED_VERSION` 后退回 classic `DescribeGroups`。
+因此 watchdog 成功返回 group 状态时，仍可能增加该协议协商计数；这不能直接等同于
+Produce/Fetch 失败，也不能笼统报告“所有 Kafka error 为零”。保留原告警规则，结合
+命令退出码、group 状态、lag 和实际数据请求错误判断，不批量屏蔽所有错误。
+
 ```bash
 date -Is
 uptime
@@ -127,4 +133,5 @@ git diff --check
 
 参考：[华为云 Agent 指标](https://support.huaweicloud.com/usermanual-ecs/ecs_03_1003.html)、
 [Kafka TopicCommand](https://github.com/apache/kafka/blob/3.9.1/tools/src/main/java/org/apache/kafka/tools/TopicCommand.java)、
+[Kafka consumer group 协议回退](https://github.com/apache/kafka/blob/3.9.1/clients/src/main/java/org/apache/kafka/clients/admin/internals/DescribeConsumerGroupsHandler.java)、
 [Vector Prometheus exporter](https://vector.dev/docs/reference/configuration/sinks/prometheus_exporter/)。
