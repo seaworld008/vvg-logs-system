@@ -76,6 +76,11 @@ VL_SEARCH_SLOW_QUERY_DURATION=8s
 
 该参考规格来自 4 核主机上的单节点部署。查询并发 4 已覆盖 Grafana 同时发出的日志列表和日志量请求；并发上限并不是越大越快，超过 CPU 能力会增加上下文切换和尾延迟。
 
+旧 ELK 已退役、16 GiB 主机改为 VictoriaLogs 与消费者专用时，另见
+[ELK 退役与专用主机容量手册](../../docs/elk-retirement-and-victorialogs-capacity-runbook.md)。
+其中的 8 GiB、2 路读取是经过容量核算和 A/B 验证的可选配置，不改变本目录的通用
+默认值；后续升级需保留现场已经批准的参数，不能直接用旧示例覆盖。
+
 先观察以下指标：
 
 ```bash
