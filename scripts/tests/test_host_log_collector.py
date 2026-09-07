@@ -52,5 +52,15 @@ class HostCollectorTest(unittest.TestCase):
         host={'files':[{'legacy_index':'java_prod_order'},{'legacy_index':'php_jxgl_log'}]}
         with self.assertRaises(ValueError): renderer.route_for(host)
 
+    def test_metrics_push_does_not_change_log_transport(self):
+        host={'hostname':'node-01','metrics':{'mode':'push'},'files':[{'id':'api','service':'api','format':'java',
+              'legacy_index':'java_api','include':['/data/apps/api/logs/*.log'],'mounts':['/data/apps/api/logs']}]}
+        cfg,compose=renderer.render(host)
+        self.assertEqual(cfg['sinks']['automq']['inputs'],['drop_formatting_noise'])
+        self.assertEqual(cfg['sources']['internal_metrics']['scrape_interval_secs'],15)
+        self.assertEqual(cfg['sinks']['metrics_remote_write']['buffer']['type'],'memory')
+        self.assertEqual(cfg['sinks']['metrics_remote_write']['request']['concurrency'],1)
+        self.assertIn('METRICS_REMOTE_WRITE_URL',compose['services']['vector']['environment'])
+
 
 if __name__ == '__main__': unittest.main()

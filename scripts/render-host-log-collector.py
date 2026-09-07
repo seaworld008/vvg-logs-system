@@ -98,6 +98,20 @@ def render(spec, initial=False):
     cfg['transforms']['normalize']['inputs'] = ['identify_'+sid for sid in sorted(known)]
     compose = yaml.safe_load((ROOT / 'docker-compose/vector/host-automq/compose.yaml').read_text(encoding='utf-8'))
     compose['services']['vector']['volumes'] += [f'{m}:{m}:ro' for m in sorted(mounts)]
+    metrics=spec.get('metrics',{})
+    if metrics.get('mode')=='push':
+        cfg['sources']['internal_metrics']['scrape_interval_secs']=15
+        tags={'project':route['project'],'environment':route['environment'],'pipeline':'host-vvg',
+              'job':'vector-host-logs','instance':metrics.get('instance',spec['hostname']),
+              'ident':metrics.get('ident',spec['hostname']),'transport':'push'}
+        cfg['transforms']['tag_exported_metrics']={'type':'remap','inputs':['internal_metrics'],
+            'source':'\n'.join('.tags.'+key+' = '+json.dumps(value) for key,value in tags.items())+'\n'}
+        cfg['sinks']['metrics_remote_write']={'type':'prometheus_remote_write','inputs':['tag_exported_metrics'],
+            'endpoint':'${METRICS_REMOTE_WRITE_URL}','healthcheck':False,
+            'batch':{'max_events':1000,'timeout_secs':1},
+            'buffer':{'type':'memory','max_events':1000,'when_full':'block'},
+            'request':{'concurrency':1,'timeout_secs':10}}
+        compose['services']['vector']['environment']['METRICS_REMOTE_WRITE_URL']='${METRICS_REMOTE_WRITE_URL}'
     return cfg, compose
 
 
