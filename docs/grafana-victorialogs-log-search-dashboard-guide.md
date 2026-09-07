@@ -88,7 +88,8 @@ curl -fsS http://127.0.0.1:9428/select/logsql/stream_field_values \
 | 服务 | `service` | Query/Multi | All | `container` 字段值 |
 | Pod | `pod` | Query/Multi | All | `pod` 字段值 |
 | 级别 | `level` | Query/Multi | All | `level` 字段值 |
-| message | `_msg` | Text box | `*` | 用户输入，使用模糊搜索 |
+| message | `message` | Text box | `*` | 用户输入，通过 `_msg:$message` 搜索正文 |
+| Filters | `Filters` | Ad hoc | 空条件 | `victorialogs-ds` 字段，顶部常驻 |
 | message 多条件表达式 | `message_filter_expr` | 隐藏 Text box | `*` | Business Text 生成 |
 | message 表单状态 | `message_filter_state` | 隐藏 Text box | 空状态 | URL-safe JSON |
 
