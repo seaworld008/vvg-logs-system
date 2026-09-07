@@ -21,6 +21,9 @@ Java / PHP 文件 -> Vector file source -> logs.<环境>.<项目>.v1 -> 项目 c
 | 其他 Java / PHP | `wangda-app` | 网大APP |
 
 `php_jxgl-pay-and-more_log*` 不属于两个例外。不要用宽泛 `jxgl*` 规则替代。
+老教务后台和 API 统一使用 `php_jxgl`；莆田后台和 API 统一使用 `php_jxgl-ptlndx`。
+后台参考 `legacy-admin.inventory.example.yaml`，共享 API 日志参考
+`legacy-api.inventory.example.yaml`。同一 NFS 文件只采集一次，不能把采集主机标签当作写入实例。
 `container` 是服务名，`pod` 是稳定主机名，`namespace` 是 `java/php/text` 类型；
 `file` 和 `source_offset` 保留排查定位。业务事件不能覆盖生成器指定的项目标签。
 

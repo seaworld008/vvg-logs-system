@@ -1,0 +1,22 @@
+project: legacy-php
+environment: prod
+hostname: legacy-api-log-owner
+files:
+  - id: jxgl
+    service: jxgl
+    format: php
+    legacy_index: php_jxgl_log
+    include:
+      - /data/apps/legacy-api/runtime/log/**/*.log
+      - /data/apps/legacy-api/runtime/log/**/*.jsonl
+      - /data/apps/legacy-api/runtime/log/**/*.ndjson
+    mounts: [/data/apps/legacy-api/runtime/log]
+  - id: jxgl_ptlndx
+    service: jxgl-ptlndx
+    format: php
+    legacy_index: jxgl-ptlndx
+    include:
+      - /data/apps/putian/runtime/log/**/*.log
+      - /data/apps/putian/runtime/log/**/*.jsonl
+      - /data/apps/putian/runtime/log/**/*.ndjson
+    mounts: [/data/apps/putian/runtime/log]

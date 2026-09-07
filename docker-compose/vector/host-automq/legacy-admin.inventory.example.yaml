@@ -1,0 +1,13 @@
+project: legacy-php
+environment: prod
+hostname: legacy-admin-01
+files:
+  - id: jxgl
+    service: jxgl
+    format: php
+    legacy_index: php_jxgl_log
+    include:
+      - /data/apps/legacy-admin/runtime/log/**/*.log
+      - /data/apps/legacy-admin/runtime/log/**/*.jsonl
+      - /data/apps/legacy-admin/runtime/log/**/*.ndjson
+    mounts: [/data/apps/legacy-admin/runtime/log]
