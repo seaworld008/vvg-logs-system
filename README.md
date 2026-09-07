@@ -71,6 +71,8 @@ VVG 直写基线位于 `k8s-deployment/vector/vvg/direct-containerd.yaml`，Gate
 - [VictoriaLogs MCP 部署说明](docker-compose/mcp-victorialogs/README.md)
 - [AutoMQ + 对象存储日志缓冲层](docker-compose/automq/README.md)
 - [日志链路选型与 Kubernetes 快速启用指南](docs/log-pipeline-selection.md)
+- [Compose 主机 Java/PHP 日志迁移与 AutoMQ 采集](docker-compose/vector/host-automq/README.md)
+- [多项目 Topic 命名、标签与权限规范](docs/log-project-naming-and-labels.md)
 
 ## VVG 核心架构
 

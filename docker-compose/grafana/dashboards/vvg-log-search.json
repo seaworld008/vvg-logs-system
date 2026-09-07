@@ -144,7 +144,7 @@
             "uid": "victorialogs-ds"
           },
           "editorMode": "code",
-          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw} | stats count() as matching_logs",
+          "expr": "cluster:~$cluster namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw} | stats count() as matching_logs",
           "queryType": "stats",
           "refId": "A"
         }
@@ -215,7 +215,7 @@
             "uid": "victorialogs-ds"
           },
           "editorMode": "code",
-          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level level:in(\"error\",\"critical\") _msg:$message ${message_filter_expr:raw} | stats count() as error_logs",
+          "expr": "cluster:~$cluster namespace:=$namespace container:=$service pod:=$pod level:=$level level:in(\"error\",\"critical\") _msg:$message ${message_filter_expr:raw} | stats count() as error_logs",
           "queryType": "stats",
           "refId": "A"
         }
@@ -437,7 +437,7 @@
             "uid": "victorialogs-ds"
           },
           "editorMode": "code",
-          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw}",
+          "expr": "cluster:~$cluster namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw}",
           "legendFormat": "{{level}}",
           "queryType": "hits",
           "refId": "A",
@@ -508,7 +508,7 @@
             "uid": "victorialogs-ds"
           },
           "editorMode": "code",
-          "expr": "namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw}",
+          "expr": "cluster:~$cluster namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw} | copy _msg as message",
           "maxLines": 500,
           "queryType": "instant",
           "refId": "A"
@@ -532,22 +532,32 @@
         "current": {
           "selected": true,
           "text": "生产 CCE",
-          "value": "生产 CCE"
+          "value": "^$"
         },
-        "description": "当前日志尚未写入 cluster 流字段；新增该字段后可改为动态多集群下拉。",
+        "description": "CCE 兼容无 cluster 字段的既有日志；项目使用独立 cluster 标签。",
         "hide": 0,
         "includeAll": false,
-        "label": "集群",
+        "label": "集群或项目",
         "multi": false,
         "name": "cluster",
         "options": [
           {
-            "selected": true,
             "text": "生产 CCE",
-            "value": "生产 CCE"
+            "value": "^$",
+            "selected": true
+          },
+          {
+            "text": "网大APP",
+            "value": "^wangda-app$",
+            "selected": false
+          },
+          {
+            "text": "老教务系统php",
+            "value": "^legacy-php$",
+            "selected": false
           }
         ],
-        "query": "生产 CCE",
+        "query": "生产 CCE : ^$, 网大APP : ^wangda-app$, 老教务系统php : ^legacy-php$",
         "skipUrlSync": false,
         "type": "custom"
       },
@@ -566,14 +576,14 @@
         "hide": 0,
         "includeAll": true,
         "allValue": "*",
-        "label": "命名空间",
+        "label": "命名空间/类型",
         "multi": true,
         "name": "namespace",
         "options": [],
         "query": {
           "field": "namespace",
           "limit": 100,
-          "query": "*",
+          "query": "cluster:~$cluster *",
           "refId": "VictoriaLogsVariableQueryEditor-VariableQuery",
           "type": "fieldValue"
         },
@@ -605,7 +615,7 @@
         "query": {
           "field": "container",
           "limit": 300,
-          "query": "namespace:=$namespace",
+          "query": "cluster:~$cluster namespace:=$namespace",
           "refId": "VictoriaLogsVariableQueryEditor-VariableQuery",
           "type": "fieldValue"
         },
@@ -630,14 +640,14 @@
         "hide": 0,
         "includeAll": true,
         "allValue": "*",
-        "label": "Pod",
+        "label": "Pod/主机",
         "multi": true,
         "name": "pod",
         "options": [],
         "query": {
           "field": "pod",
           "limit": 500,
-          "query": "namespace:=$namespace container:=$service",
+          "query": "cluster:~$cluster namespace:=$namespace container:=$service",
           "refId": "VictoriaLogsVariableQueryEditor-VariableQuery",
           "type": "fieldValue"
         },
@@ -669,7 +679,7 @@
         "query": {
           "field": "level",
           "limit": 30,
-          "query": "namespace:=$namespace container:=$service pod:=$pod",
+          "query": "cluster:~$cluster namespace:=$namespace container:=$service pod:=$pod",
           "refId": "VictoriaLogsVariableQueryEditor-VariableQuery",
           "type": "fieldValue"
         },
@@ -750,6 +760,6 @@
   "timezone": "browser",
   "title": "VVG 生产日志检索大屏",
   "uid": "vvg-log-search",
-  "version": 15,
+  "version": 17,
   "weekStart": "monday"
 }

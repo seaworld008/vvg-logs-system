@@ -23,6 +23,7 @@
 | KubeDoor Gateway Dashboard / GeoIP | `scripts/sanitize-clickhouse-gateway-dashboard.mjs`、`docker-compose/grafana/routes/gateway-clickhouse/`、`k8s-deployment/vector/gateway/geoip/NOTICE.md` |
 | VVG/Gateway 持久缓冲 | `docker-compose/automq/README.md`、`docs/automq-log-buffer-runbook.md` |
 | 四条链路选型与完整 K8S YAML | `docs/log-pipeline-selection.md` |
+| 主机 Java/PHP Filebeat 迁移 | `docker-compose/vector/host-automq/README.md`、`scripts/render-host-log-collector.py` |
 | 共享宿主机负载与 producer 高峰误重启 | `docs/shared-host-load-runbook.md` |
 | Vector OOM、排队预算与 9000 行日志完整性 | `docs/vector-memory-and-recovery-runbook.md` |
 

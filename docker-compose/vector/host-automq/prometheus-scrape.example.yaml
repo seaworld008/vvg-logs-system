@@ -1,0 +1,30 @@
+# Merge these scrape_configs into the existing vmagent source and rendered config.
+scrape_configs:
+  - job_name: vector-host-logs
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: [app-node-01.internal.example:19610]
+        labels:
+          project: wangda-app
+          environment: prod
+          pipeline: host-vvg
+      - targets: [legacy-node-01.internal.example:19610]
+        labels:
+          project: legacy-php
+          environment: prod
+          pipeline: host-vvg
+  - job_name: vector-project-consumers
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: [logs.internal.example:19612]
+        labels:
+          project: wangda-app
+          environment: prod
+          pipeline: host-vvg
+      - targets: [logs.internal.example:19613]
+        labels:
+          project: legacy-php
+          environment: prod
+          pipeline: host-vvg

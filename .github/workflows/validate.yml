@@ -30,3 +30,8 @@ jobs:
 
       - name: Run Compose and Vector validation
         run: bash scripts/validate-configs.sh --runtime
+
+      - name: Validate host log migration and file recovery
+        run: |
+          python -m unittest discover -s scripts/tests -p test_host_log_collector.py -v
+          python scripts/test-host-log-runtime.py

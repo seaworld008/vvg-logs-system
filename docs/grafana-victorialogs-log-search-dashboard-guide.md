@@ -50,7 +50,13 @@ docker-compose/grafana/dashboards/vvg-log-search.json
 | --- | --- | --- |
 | `cluster` | 多集群选择 | 必须是稳定的逻辑集群标识，不能使用节点名、Pod IP 或 ELB VIP 代替 |
 
-当前生产日志没有 `cluster` 字段，因此大屏使用单值控件 `生产 CCE` 作为兼容入口，但查询不会使用这个占位值。
+既有 CCE 日志没有 `cluster` 字段，新 Compose 项目日志写入稳定的 `cluster` 标签。
+大屏“集群或项目”用固定、可审计的名称与正则映射兼容旧数据：`生产 CCE` 对应 `^$`，
+`网大APP` 对应 `^wangda-app$`，`老教务系统php` 对应 `^legacy-php$`。
+所有变量查询和四个面板均先执行 `cluster:~$cluster`，通过 datasource 的正常变量
+引用转义，不使用 raw 项目插值。服务、Pod/主机、级别随项目联动；原 CCE 默认 namespace
+仍为 `jwxt-prod`。项目中 `namespace` 表示 `java/php/text` 类型，选择 All 可跨类型检索。
+旧链接若携带 `var-cluster=生产 CCE`，需改选一次“生产 CCE”或使用不带旧变量的链接。
 
 ### 3.3 检查实际流字段
 
@@ -77,7 +83,7 @@ curl -fsS http://127.0.0.1:9428/select/logsql/stream_field_values \
 
 | 显示名称 | 变量名 | 类型 | 默认值 | 数据来源 |
 | --- | --- | --- | --- | --- |
-| 集群 | `cluster` | Custom | `生产 CCE` | 单值占位 |
+| 集群或项目 | `cluster` | Custom | `生产 CCE` | 固定名称到流标签正则的映射 |
 | 命名空间 | `namespace` | Query/Multi | `jwxt-prod` | `namespace` 字段值 |
 | 服务 | `service` | Query/Multi | All | `container` 字段值 |
 | Pod | `pod` | Query/Multi | All | `pod` 字段值 |

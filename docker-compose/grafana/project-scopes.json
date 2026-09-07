@@ -1,0 +1,5 @@
+[
+  { "kind": "legacy-cluster", "id": "prod-cce", "name": "生产 CCE" },
+  { "kind": "project", "id": "wangda-app", "name": "网大APP" },
+  { "kind": "project", "id": "legacy-php", "name": "老教务系统php" }
+]

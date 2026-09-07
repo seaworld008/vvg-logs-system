@@ -103,7 +103,7 @@ assert.throws(
   /高级过滤只允许 LogsQL 过滤条件/,
 );
 
-assert.equal(dashboard.version, 15);
+assert.equal(dashboard.version, 17);
 const dashboardPanel = dashboard.panels.find(({ id }) => id === panelTemplate.id);
 assert.ok(dashboardPanel, "dashboard must embed the message filter panel");
 assert.deepEqual(dashboardPanel.options, panelTemplate.options);
@@ -156,7 +156,7 @@ assert.deepEqual(trendPanel.transformations, [
 ]);
 assert.equal(
   trendTarget.expr,
-  "namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw}",
+  "cluster:~$cluster namespace:=$namespace container:=$service pod:=$pod level:=$level _msg:$message ${message_filter_expr:raw}",
 );
 assert.equal(trendTarget.queryType, "hits");
 assert.equal(trendTarget.supportingQueryType, "logsVolume");
@@ -177,7 +177,7 @@ for (const [name, defaultValue] of [
 }
 
 for (const [name, label] of [
-  ["cluster", "集群"],
+  ["cluster", "集群或项目"],
   ["service", "服务"],
   ["message", "message"],
 ]) {
@@ -188,7 +188,15 @@ const targets = dashboard.panels.flatMap((item) => item.targets ?? []);
 const filteredTargets = targets.filter(({ expr }) => expr?.includes("_msg:$message"));
 assert.equal(filteredTargets.length, 4);
 for (const { expr } of filteredTargets) {
+  assert.ok(expr.startsWith("cluster:~$cluster "), "every panel must enforce the selected scope");
   assert.match(expr, /_msg:\$message \$\{message_filter_expr:raw\}/);
 }
+for (const item of dashboard.templating.list.filter(({ type }) => type === "query")) {
+  assert.ok(item.query.query.startsWith("cluster:~$cluster "), `${item.name} must depend on scope`);
+  assert.equal(item.allValue, "*");
+}
+const scope = dashboard.templating.list.find(({ name }) => name === "cluster");
+assert.deepEqual(scope.options.map(({ value }) => value), ["^$", "^wangda-app$", "^legacy-php$"]);
+assert.ok(dashboard.panels.find(({id}) => id === 4).targets[0].expr.endsWith(" | copy _msg as message"));
 
 console.log("PASS: VVG message filter and Explore-style Logs volume validate");

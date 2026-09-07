@@ -1,0 +1,14 @@
+hostname: app-node-01
+files:
+  - id: java_order
+    service: order
+    format: java
+    legacy_index: java_prod_order
+    include: [/data/apps/order/logs/*.log]
+    mounts: [/data/apps/order/logs]
+  - id: php_portal
+    service: portal
+    format: php
+    legacy_index: php_portal_log
+    include: [/data/apps/portal/runtime/log/**/*.log]
+    mounts: [/data/apps/portal/runtime/log]
