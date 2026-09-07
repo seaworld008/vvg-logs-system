@@ -299,8 +299,8 @@ data:
           max_events: 1000
           timeout_secs: 5
         buffer:
-          type: memory
-          max_events: 100
+          type: disk
+          max_size: 1073741824
           when_full: block
         query_settings:
           async_insert_settings:
@@ -311,6 +311,7 @@ data:
           timeout_secs: 180
           retry_initial_backoff_secs: 1
           retry_max_duration_secs: 30
+          concurrency: 1
       parse_diagnostics:
         type: console
         inputs:
@@ -396,7 +397,7 @@ spec:
       labels:
         app: vector-clickhouse-gateway
       annotations:
-        logs.example.com/vector-config-sha256: 838628de7c53e3dd622ade66947acb5da6dba5f6c952c010463b00d98dbbdadd
+        logs.example.com/vector-config-sha256: 785ab961291b8c8d8b41605a238f466bc6e945f503b125231dfdce5b61194f5a
         logs.example.com/automq-mode: production
     spec:
       automountServiceAccountToken: false
@@ -450,6 +451,8 @@ spec:
           value: '9599'
         - name: AUTOMQ_STALL_BUFFER_THRESHOLD_BYTES
           value: '1048576'
+        - name: AUTOMQ_STALL_MIN_SENT_BYTES_PER_SEC
+          value: '8192'
         - name: VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION
           value: 'true'
         ports:

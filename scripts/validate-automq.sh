@@ -74,8 +74,8 @@ validate_static() {
     "AutoMQ consumers pin Vector 0.58.0 by digest"
   forbid_regex "${env}" '(^|[=:])[^#[:space:]]*latest([[:space:]]|$)' \
     "AutoMQ environment has no latest image"
-  require_literal "${remote_vvg_env}" 'VECTOR_IMAGE=timberio/vector@sha256:' \
-    "Remote VVG consumers require an exact Vector digest"
+  require_literal "${remote_vvg_env}" 'VECTOR_IMAGE=registry.example.com/observability/timberio/vector:0.58.0-alpine@sha256:' \
+    "Remote VVG consumers pin the same Vector release and digest as producers"
   forbid_regex "${remote_vvg_env}" '(^|[=:])[^#[:space:]]*latest([[:space:]]|$)' \
     "Remote VVG consumer environment has no latest image"
   forbid_regex "${remote_vvg_compose}" '192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.' \
@@ -283,9 +283,9 @@ PY
     "VVG downstream acknowledgements are enabled"
   require_literal "${gateway}" 'acknowledgements:' \
     "Gateway downstream acknowledgements are enabled"
-  require_literal "${vvg}" 'max_events: 500' \
+  require_literal "${vvg}" 'max_events: 64' \
     "VVG memory buffer limits decode amplification"
-  require_literal "${gateway}" 'max_events: 5000' \
+  require_literal "${gateway}" 'max_events: 16' \
     "Gateway memory buffer is bounded"
   if [[ "$(grep -Fh 'type: memory' "${vvg}" "${gateway}" | wc -l)" == 2 ]]; then
     pass "Kafka consumers use bounded memory buffers and rely on durable offsets"
@@ -467,6 +467,8 @@ validate_runtime() {
   validate_vector "${root}/config/vector-gateway-consumer.yaml" 9599
   VECTOR_IMAGE=timberio/vector:0.58.0-alpine \
     bash "${root}/scripts/test-gateway-large-event.sh"
+  VECTOR_IMAGE=timberio/vector:0.58.0-alpine \
+    bash scripts/test-vvg-multiline-preservation.sh
 
   python3 -c 'import yaml' >/dev/null 2>&1 || {
     printf 'PyYAML from scripts/requirements-automq.txt is required\n' >&2

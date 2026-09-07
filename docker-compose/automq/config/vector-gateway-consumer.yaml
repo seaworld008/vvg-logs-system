@@ -89,7 +89,7 @@ sinks:
       timeout_secs: 1
     buffer:
       type: memory
-      max_events: 5000
+      max_events: 16
       when_full: block
     query_settings:
       async_insert_settings:
@@ -97,6 +97,7 @@ sinks:
         wait_for_processing: true
         wait_for_processing_timeout: 120
     request:
+      concurrency: 2
       timeout_secs: 180
       retry_initial_backoff_secs: 1
       retry_max_duration_secs: 30

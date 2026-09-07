@@ -69,6 +69,8 @@ Vector位于 `k8s-deployment/vector/gateway/`，Grafana可选配置位于
 - shadow 与 production producer 的 metrics hostPort相同，主切前必须先停止 shadow；shadow 与 production consumer不得同时写同一正式后端。
 - 生产者清单必须由 `scripts/render-automq-vector-manifest.py` 从当前真实源 manifest生成，禁止用仓库公开示例覆盖现场解析、GeoIP或checkpoint。
 - VVG/Gateway 直写配置必须长期保留；小到中等规模优先直写，中大规模且需要集中缓冲时再采用 AutoMQ + 对象存储。
+- Vector 内存与恢复任务必须读取 `docs/vector-memory-and-recovery-runbook.md`。Kafka native queue 每 sink 64 MiB；VVG/Gateway consumer 分别为 64/16 个 memory/block 事件和最多 2 个在途请求；Gateway 采集端大事件 fallback 为 1 GiB disk/block、单个在途请求。
+- 正常 Java 多行日志按日志头和空闲超时完整合并，不按固定行数截断或拆段。当前默认不引入无损关联分片；极端日志的既有截断和后端大小限制必须如实记录，不能宣称全部超大日志无损。
 - 四条 production链路由 `docs/log-pipeline-selection.md` 统一索引；直写清单是源，仓库 AutoMQ清单必须由 `scripts/render-automq-example-manifests.py` 生成并通过防漂移检查。
 - 本阶段不得停止或重建 `redis-v9`、`elk_redis`、Logstash、Kibana、Elasticsearch、VictoriaLogs、ClickHouse、Grafana或业务服务。
 

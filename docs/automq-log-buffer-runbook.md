@@ -199,7 +199,8 @@ CPU告警均可产生并恢复。
   获取完整 Topic/leader 元数据。consumer 的低预取队列配合 `fetch.queue.backoff.ms=100`。
 - Vector 0.58 的 producer 在实测中仍可能停留在旧的 `Leader: -1` 会话。producer Pod
   使用保守 liveness 兜底：Broker 不可达时不重启；仅当 Broker 已可达、Kafka disk
-  buffer 超过正常抖动阈值、该 lane 队列连续 90 秒没有下降且实际发送低于 64 KiB/s
+  buffer 超过正常抖动阈值、该 lane 队列连续 90 秒没有下降且实际发送低于对应下限
+  （VVG 64 KiB/s、Gateway 8 KiB/s）
   时才重启。高吞吐积压不触发重启，各 lane 独立判断；只检查发送计数是否偶尔
   增长会漏掉“连接存在但追赶吞吐接近零”的半卡死状态。buffer 位于 hostPath，
   新 Pod 必须从同一 ledger 继续排空。
