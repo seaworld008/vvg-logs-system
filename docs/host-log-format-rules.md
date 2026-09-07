@@ -29,8 +29,20 @@
 
 ## 目录与服务
 
-PHP 的 `service` 和兼容 `container` 统一以 `php_` 开头，例如 `php_jxgl`、
-`php_jxgl-ptlndx`、`php_activityadmin`。Java 服务名不添加该前缀。
+PHP 的 `service` 和兼容 `container` 统一以 `php_` 开头。老教务后台和教务 API
+统一使用 `php_jxgl`；莆田后台和 API 统一使用 `php_jxgl-ptlndx`，不按 admin/api 拆分。
+网大后台例如 `php_activityadmin`。Java 服务名不添加该前缀。
+
+后台和 API 都属于 `legacy-php`，共用 `logs.prod.legacy-php.v1` 以及该项目的一个消费者。
+参考 `legacy-admin.inventory.example.yaml` 和 `legacy-api.inventory.example.yaml`。
+服务显示名调整时保留原 source ID、include、fingerprint、state 和 checkpoint，
+不能为改名重新从头读取文件。历史日志保留旧标签，新日志使用新服务名。
+
+共享日志目录只由一个指定采集端读取。例如 API 的多台主机通过 NFS 写入同一份
+runtime/log，应该在共享目录所有者处采集一次；不能在每个 NFS 客户端重复部署相同
+采集。此时 `instance/pod` 表示采集主机，不能冒充实际写入容器。莆田后台和 API
+共用文件时统一标为 `php_jxgl-ptlndx`；精确区分写入实例需要应用增加身份字段或使用
+独立日志目录。Nginx access/error 日志不包含在这些应用日志清单中。
 
 每个已经确认的日志根目录使用递归模式：
 
