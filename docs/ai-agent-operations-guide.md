@@ -25,6 +25,7 @@
 | 四条链路选型与完整 K8S YAML | `docs/log-pipeline-selection.md` |
 | 主机 Java/PHP Filebeat 迁移 | `docker-compose/vector/host-automq/README.md`、`scripts/render-host-log-collector.py` |
 | 多项目迁移经验、PHP 共享目录、正文与原生 Filters | `docs/host-log-migration-lessons.md` |
+| 旧 ELK 退役、数据清理及 VictoriaLogs 专用主机容量 | `docs/elk-retirement-and-victorialogs-capacity-runbook.md` |
 | 共享宿主机负载与 producer 高峰误重启 | `docs/shared-host-load-runbook.md` |
 | Vector OOM、排队预算与 9000 行日志完整性 | `docs/vector-memory-and-recovery-runbook.md` |
 

@@ -74,6 +74,7 @@ VVG 直写基线位于 `k8s-deployment/vector/vvg/direct-containerd.yaml`，Gate
 - [Compose 主机 Java/PHP 日志迁移与 AutoMQ 采集](docker-compose/vector/host-automq/README.md)
 - [多项目 Topic 命名、标签与权限规范](docs/log-project-naming-and-labels.md)
 - [网大APP、老教务PHP迁移与原生 Filters 实践](docs/host-log-migration-lessons.md)
+- [ELK 退役与 VictoriaLogs 专用主机容量调整](docs/elk-retirement-and-victorialogs-capacity-runbook.md)
 - [v0.7.0 发布说明](docs/releases/v0.7.0.md)
 
 ## VVG 核心架构

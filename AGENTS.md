@@ -72,7 +72,7 @@ Vector位于 `k8s-deployment/vector/gateway/`，Grafana可选配置位于
 - Vector 内存与恢复任务必须读取 `docs/vector-memory-and-recovery-runbook.md`。Kafka native queue 每 sink 64 MiB；VVG/Gateway consumer 分别为 64/16 个 memory/block 事件和最多 2 个在途请求；Gateway 采集端大事件 fallback 为 1 GiB disk/block、单个在途请求。
 - 正常 Java 多行日志按日志头和空闲超时完整合并，不按固定行数截断或拆段。当前默认不引入无损关联分片；极端日志的既有截断和后端大小限制必须如实记录，不能宣称全部超大日志无损。
 - 四条 production链路由 `docs/log-pipeline-selection.md` 统一索引；直写清单是源，仓库 AutoMQ清单必须由 `scripts/render-automq-example-manifests.py` 生成并通过防漂移检查。
-- 本阶段不得停止或重建 `redis-v9`、`elk_redis`、Logstash、Kibana、Elasticsearch、VictoriaLogs、ClickHouse、Grafana或业务服务。
+- AutoMQ 迁移阶段未经单独授权，不得停止或重建 `redis-v9`、`elk_redis`、Logstash、Kibana、Elasticsearch、VictoriaLogs、ClickHouse、Grafana或业务服务。已单独批准的旧 ELK 退役或 VictoriaLogs 容量调整先读 `docs/elk-retirement-and-victorialogs-capacity-runbook.md`，按实际所有权限定对象。
 
 ## 主机 Java/PHP 迁移专区
 
