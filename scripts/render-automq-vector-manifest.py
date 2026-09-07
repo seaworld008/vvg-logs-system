@@ -154,7 +154,7 @@ def kafka_sink(inputs: list[str], buffer_size: int) -> dict[str, Any]:
             "enable.idempotence": "true",
             "max.in.flight.requests.per.connection": "5",
             "message.max.bytes": "4194304",
-            "queue.buffering.max.kbytes": "262144",
+            "queue.buffering.max.kbytes": "65536",
             "linger.ms": "100",
             "metadata.max.age.ms": "60000",
             "metadata.recovery.strategy": "rebootstrap",

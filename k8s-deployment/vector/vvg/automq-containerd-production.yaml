@@ -165,7 +165,7 @@ data:
           enable.idempotence: 'true'
           max.in.flight.requests.per.connection: '5'
           message.max.bytes: '4194304'
-          queue.buffering.max.kbytes: '262144'
+          queue.buffering.max.kbytes: '65536'
           linger.ms: '100'
           metadata.max.age.ms: '60000'
           metadata.recovery.strategy: rebootstrap
@@ -209,7 +209,7 @@ data:
           enable.idempotence: 'true'
           max.in.flight.requests.per.connection: '5'
           message.max.bytes: '4194304'
-          queue.buffering.max.kbytes: '262144'
+          queue.buffering.max.kbytes: '65536'
           linger.ms: '100'
           metadata.max.age.ms: '60000'
           metadata.recovery.strategy: rebootstrap
@@ -368,7 +368,7 @@ spec:
       labels:
         app: vector
       annotations:
-        logs.example.com/vector-config-sha256: 3d4ca6bd453668f0ceae1414b158637f8476171e0b7ee247af88f4d3a51b5ac8
+        logs.example.com/vector-config-sha256: 654ea841c321972066bf432ed5696bec727dfe9c78422c984877c6430acc6340
         logs.example.com/automq-mode: production
     spec:
       terminationGracePeriodSeconds: 120

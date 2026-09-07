@@ -329,6 +329,14 @@ class ProducerProgressTests(ShellFixture):
 
 
 class ManifestTests(unittest.TestCase):
+    def test_native_producer_queues_are_bounded_behind_disk_backpressure(self):
+        sink = renderer.kafka_sink(["events"], 5368709120)
+        self.assertEqual(sink["librdkafka_options"]["queue.buffering.max.kbytes"], "65536")
+        self.assertEqual(sink["buffer"], {"type": "disk", "max_size": 5368709120, "when_full": "block"})
+        self.assertEqual(sink["message_timeout_ms"], 0)
+        self.assertEqual(sink["librdkafka_options"]["acks"], "all")
+        self.assertEqual(sink["compression"], "zstd")
+
     def config(self):
         docs = yaml.safe_load_all((ROOT / "k8s-deployment/vector/vvg/direct-containerd.yaml").read_text())
         return yaml.safe_load(next(d for d in docs if d.get("kind") == "ConfigMap")["data"]["vector.yaml"])
