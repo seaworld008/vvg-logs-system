@@ -103,25 +103,73 @@ with (root / "mutations").open("a") as stream:
 
 
 class HealthTests(ShellFixture):
-    def test_health_requires_partition_rows_and_every_leader(self):
-        self.executable("kafka-broker-api-versions.sh", "#!/bin/sh\nexit 0\n")
-        self.executable("kafka-topics.sh", '#!/bin/sh\nprintf "%s\\n" "$TOPIC_DESCRIPTION"\n')
-        script = self.directory / "health.sh"
-        script.write_text((AUTOMQ / "scripts/healthcheck-kafka.sh").read_text()
+    def setUp(self):
+        super().setUp()
+        self.executable("kafka-broker-api-versions.sh", "#!/bin/sh\nexit 99\n")
+        self.executable("kafka-topics.sh", '''#!/usr/bin/env python3
+import json, os, pathlib, sys
+with (pathlib.Path(os.environ["FIXTURE"]) / "calls").open("a") as stream:
+    stream.write(json.dumps({"args": sys.argv[1:], "heap": os.environ["KAFKA_HEAP_OPTS"],
+                            "jvm": os.environ["KAFKA_JVM_PERFORMANCE_OPTS"]}) + "\\n")
+print(os.environ["TOPIC_DESCRIPTION"])
+sys.exit(int(os.environ.get("KAFKA_EXIT", "0")))
+''')
+        self.script = self.directory / "health.sh"
+        self.script.write_text((AUTOMQ / "scripts/healthcheck-kafka.sh").read_text()
                           .replace("/opt/automq/kafka/bin", str(self.bin)))
-        self.env.update(VVG_TOPIC="vvg.logs.v1", GATEWAY_TOPIC="gateway.access.v1")
+        self.env.update(VVG_TOPIC="vvg.logs.v1", GATEWAY_TOPIC="gateway.access.v1",
+                        KAFKA_HEAP_OPTS="-Xms1024m -Xmx1024m",
+                        KAFKA_JVM_PERFORMANCE_OPTS="-XX:+UseZGC")
+
+    def topic(self, name):
+        return (f"Topic: {name} TopicId: test PartitionCount: 1 ReplicationFactor: 1\n"
+                f"Topic: {name} Partition: 0 Leader: 0 Replicas: 0 Isr: 0\n")
+
+    def test_health_requires_both_complete_topics_and_every_leader(self):
+        vvg = self.topic("vvg.logs.v1")
+        gateway = self.topic("gateway.access.v1")
+        valid = vvg + gateway
         for description, healthy in [
             ("", False),
             ("Topic: vvg.logs.v1 PartitionCount: 1 ReplicationFactor: 1", False),
-            ("Topic: vvg.logs.v1 Partition: 0 Leader: -1 Replicas: 0 Isr:", False),
-            ("Topic: vvg.logs.v1 Partition: 0 Leader: none Replicas: 0 Isr:", False),
-            ("Topic: vvg.logs.v1 Partition: 0 Leader: 0 Replicas: 0 Isr: 0", True),
-            ("Topic: vvg.logs.v1 Partition: 0 Leader: 0 Replicas: 0 Isr: 0\n"
-             "Topic: vvg.logs.v1 Partition: 1 Leader: -1 Replicas: 0 Isr:", False),
+            (vvg, False), (gateway, False), (valid, True),
+            (valid.replace("Leader: 0", "Leader: -1", 1), False),
+            (valid.replace("Leader: 0", "Leader: none", 1), False),
+            (valid.replace("PartitionCount: 1", "PartitionCount: 2", 1), False),
+            (valid.replace("Partition: 0", "Partition: 1", 1), False),
+            (valid.replace("Partition: 0", "Partition: bad", 1), False),
+            (valid + "Topic: vvg.logs.v1 Partition: 0 Leader: 0\n", False),
+            (valid.replace("vvg.logs.v1", "vvgXlogsXv1"), False),
+            (valid + "Topic: unrelated Partition: 0 Leader: -1\n", True),
         ]:
             with self.subTest(description=description):
                 self.env["TOPIC_DESCRIPTION"] = description
-                self.assertEqual(self.run_script(script).returncode == 0, healthy)
+                self.assertEqual(self.run_script(self.script).returncode == 0, healthy)
+
+    def test_one_authenticated_bounded_client_without_broker_jvm(self):
+        self.env["TOPIC_DESCRIPTION"] = self.topic("vvg.logs.v1") + self.topic("gateway.access.v1")
+        result = self.run_script(self.script)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = [json.loads(line) for line in (self.directory / "calls").read_text().splitlines()]
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["heap"], "-Xms32m -Xmx128m")
+        self.assertIn("UseSerialGC", calls[0]["jvm"])
+        self.assertIn("ActiveProcessorCount=1", calls[0]["jvm"])
+        args = calls[0]["args"]
+        self.assertIn("--command-config", args)
+        self.assertEqual(args[args.index("--topic") + 1], r"^(vvg\.logs\.v1|gateway\.access\.v1)$")
+
+    def test_failed_or_timed_out_query_never_reports_healthy(self):
+        self.env["TOPIC_DESCRIPTION"] = self.topic("vvg.logs.v1") + self.topic("gateway.access.v1")
+        for code in (1, 124):
+            self.env["KAFKA_EXIT"] = str(code)
+            self.assertNotEqual(self.run_script(self.script).returncode, 0)
+
+    def test_invalid_or_identical_topic_names_fail_before_query(self):
+        for topic in ("", "vvg|other", "vvg$(id)", "gateway.access.v1"):
+            self.env["VVG_TOPIC"] = topic
+            self.assertNotEqual(self.run_script(self.script).returncode, 0)
+        self.assertFalse((self.directory / "calls").exists())
 
 
 class WatchdogTests(ShellFixture):
@@ -149,6 +197,8 @@ elif args[0] == "ps":
         ids = ids + state.get("foreign_services", {}).get(service, [])
     print("\\n".join(ids))
 elif args[0] == "exec":
+    assert "KAFKA_HEAP_OPTS=-Xms32m -Xmx128m" in args
+    assert "KAFKA_JVM_PERFORMANCE_OPTS=-XX:+UseSerialGC -XX:ActiveProcessorCount=1" in args
     group = args[args.index("--group") + 1]
     with (root / "queries").open("a") as stream:
         stream.write(group + "\\n")
@@ -223,6 +273,59 @@ else:
             stream.write(f"UNRELATED_VALUE=$(touch {marker})\n")
         self.tick()
         self.assertFalse(marker.exists(), "watchdog executed .env as shell code")
+
+
+class ProducerProgressTests(ShellFixture):
+    def setUp(self):
+        super().setUp()
+        self.clock = 1000
+        self.state_file = self.directory / "progress"
+        self.script = self.directory / "probe.sh"
+        self.script.write_text(renderer.PRODUCER_STALL_CHECK_SCRIPT.replace(
+            "/tmp/automq-producer-progress", str(self.state_file)))
+        self.executable("nc", '#!/bin/sh\nexit "${BROKER_EXIT:-0}"\n')
+        self.executable("wget", '#!/bin/sh\ncat "$FIXTURE/metrics"\n')
+        self.executable("date", '#!/bin/sh\nprintf "%s\\n" "$NOW"\n')
+        self.env.update(AUTOMQ_METRICS_PORT="9598", AUTOMQ_BOOTSTRAP_SERVERS="broker:9092",
+                        AUTOMQ_STALL_BUFFER_THRESHOLD_BYTES="67108864")
+
+    def tick(self, lanes, timestamp=True):
+        self.env["NOW"] = str(self.clock)
+        self.clock += 30
+        lines = []
+        for lane, queued, sent in lanes:
+            for metric, value in (("buffer_size_bytes", queued), ("component_sent_event_bytes_total", sent)):
+                suffix = " 123456789" if timestamp else ""
+                lines.append(f'vector_{metric}{{component_id="{lane}",component_type="kafka"}} {value}{suffix}')
+        (self.directory / "metrics").write_text("\n".join(lines))
+        return self.run_script(self.script).returncode
+
+    def test_busy_growing_queue_is_not_a_stall(self):
+        for timestamp in (True, False):
+            self.state_file.unlink(missing_ok=True)
+            self.assertEqual(self.tick([("a", 100000000, 100000000)], timestamp), 0)
+            self.assertEqual(self.tick([("a", 800000000, 400000000)], timestamp), 0)
+
+    def test_busy_lane_does_not_hide_slow_or_stuck_lane(self):
+        self.assertEqual(self.tick([("a", 100000000, 100000000), ("b", 100000000, 100000000)]), 0)
+        self.assertEqual(self.tick([("a", 200000000, 400000000), ("b", 200000000, 100001000)]), 1)
+        self.assertEqual(self.tick([("a", 300000000, 700000000), ("b", 300000000, 100001000)]), 1)
+
+    def test_draining_queue_low_queue_and_counter_reset_are_healthy(self):
+        self.assertEqual(self.tick([("a", 100000000, 100000000)]), 0)
+        self.assertEqual(self.tick([("a", 90000000, 100000000)]), 0)
+        self.assertEqual(self.tick([("a", 120000000, 10)]), 0)
+        self.assertEqual(self.tick([("a", 100, 10)]), 0)
+        self.assertEqual(self.tick([("a", 200, 10)]), 0)
+
+    def test_broker_outage_clears_history_and_missing_metrics_fail(self):
+        self.tick([("a", 100000000, 100000000)])
+        self.env["BROKER_EXIT"] = "1"
+        self.assertEqual(self.tick([("a", 200000000, 100000000)]), 0)
+        self.assertFalse(self.state_file.exists())
+        self.env["BROKER_EXIT"] = "0"
+        self.assertEqual(self.tick([("a", 200000000, 100000000)]), 0)
+        self.assertEqual(self.tick([]), 1)
 
 
 class ManifestTests(unittest.TestCase):

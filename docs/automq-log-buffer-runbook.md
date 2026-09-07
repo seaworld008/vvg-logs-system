@@ -199,7 +199,8 @@ CPU告警均可产生并恢复。
   获取完整 Topic/leader 元数据。consumer 的低预取队列配合 `fetch.queue.backoff.ms=100`。
 - Vector 0.58 的 producer 在实测中仍可能停留在旧的 `Leader: -1` 会话。producer Pod
   使用保守 liveness 兜底：Broker 不可达时不重启；仅当 Broker 已可达、Kafka disk
-  buffer 超过正常抖动阈值且队列连续 90 秒没有下降时才重启。只检查发送计数是否偶尔
+  buffer 超过正常抖动阈值、该 lane 队列连续 90 秒没有下降且实际发送低于 64 KiB/s
+  时才重启。高吞吐积压不触发重启，各 lane 独立判断；只检查发送计数是否偶尔
   增长会漏掉“连接存在但追赶吞吐接近零”的半卡死状态。buffer 位于 hostPath，
   新 Pod 必须从同一 ledger 继续排空。
 - Consumer watchdog 先检查 Gateway，再检查 VVG；同一 group 的多个 consumer 并行
@@ -212,6 +213,10 @@ CPU告警均可产生并恢复。
   partition leader 就绪。健康检查必须同时确认两个业务 Topic 均无 `Leader: -1`。
   空集群首次启动时 bootstrap 只等待已认证 API 后建 Topic，消费者再等待 Topic-aware
   health 和 bootstrap 成功；bootstrap 不能反过来依赖 Topic-aware health。
+- 共享宿主机负载排查必须包含临时 Kafka CLI 的消耗。健康检查用单次认证 describe
+  验证两个 Topic 的完整分区与 leader，health/watchdog 的短命 CLI 使用独立小堆和
+  SerialGC，避免继承 Broker 的 1 GiB/ZGC。完整方法见
+  [共享宿主机负载运行手册](shared-host-load-runbook.md)。
 - 6 GiB 容器内把 Heap、Direct、WAL 和 Block 按比例放大，在真实 Gateway 主切和 VVG
   积压追赶中两次触发 cgroup OOM。最终保留 3 CPU/6 GiB cgroup，但恢复官方 Tiny 内存
   参数，为 native、线程栈、ZGC、网络和冷读瞬时内存保留约 3 GiB；不得只按各显式

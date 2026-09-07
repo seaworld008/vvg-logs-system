@@ -78,6 +78,11 @@ docker compose --env-file .env --profile shadow up -d
 消费者同时等待 bootstrap 成功和 Broker healthy。不能让 bootstrap 等待这个包含
 Topic 的健康检查，否则空集群会循环等待。
 
+日常健康检查用一次认证后的双 Topic describe，并核对完整分区和 leader。健康检查及
+watchdog 的 Kafka CLI 使用独立的 32/128 MiB Heap、SerialGC 和单逻辑 CPU 视图；
+不继承 Broker JVM 配置。共享宿主机负载及 producer 高峰误重启的排查、发布与验收见
+[共享宿主机负载运行手册](../../docs/shared-host-load-runbook.md)。
+
 consumer watchdog 仅管理本机 Compose project `automq` 的消费者。它通过 Kafka
 `--describe --state` 查询成员数，连续两次确认 `Empty / 0` 才优雅重启对应 group；
 查询失败、输出无法识别、零成员 rebalance 或 Broker 不健康会清除连续计数，并继续

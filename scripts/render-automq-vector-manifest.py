@@ -37,7 +37,7 @@ ManifestDumper.add_representer(str, represent_readable_string)
 PRODUCER_STALL_CHECK_SCRIPT = r"""#!/bin/sh
 set -eu
 
-state_file=/tmp/automq-producer-last-queue
+state_file=/tmp/automq-producer-progress
 metrics_url="http://127.0.0.1:${AUTOMQ_METRICS_PORT}/metrics"
 broker="${AUTOMQ_BOOTSTRAP_SERVERS%%,*}"
 
@@ -47,28 +47,44 @@ if ! nc -z -w 2 "${broker%:*}" "${broker##*:}" >/dev/null 2>&1; then
 fi
 
 metrics="$(wget -qO- -T 5 "${metrics_url}")"
-queued="$(printf '%s\n' "${metrics}" | awk '
-  /^vector_buffer_size_bytes\{/ && /component_type="kafka"/ {sum += $(NF-1)}
-  END {printf "%.0f", sum + 0}
-')"
-sent="$(printf '%s\n' "${metrics}" | awk '
-  /^vector_component_sent_events_total\{/ && /component_type="kafka"/ {sum += $(NF-1)}
-  END {printf "%.0f", sum + 0}
-')"
-
-previous="$(cat "${state_file}" 2>/dev/null || true)"
-printf '%s\n' "${queued}" > "${state_file}"
-
-if [ "${queued}" -lt "${AUTOMQ_STALL_BUFFER_THRESHOLD_BYTES}" ]; then
-  exit 0
-fi
-if [ -z "${previous}" ] || [ "${queued}" -lt "${previous}" ]; then
-  exit 0
-fi
-
-printf 'Kafka producer not draining: queued=%s previous=%s sent=%s\n' \
-  "${queued}" "${previous}" "${sent}" >&2
-exit 1
+touch "${state_file}"
+status=0
+# Check lanes independently: a busy lane must not conceal a stalled sibling.
+printf '%s\n' "${metrics}" | awk \
+  -v now="$(date +%s)" \
+  -v threshold="${AUTOMQ_STALL_BUFFER_THRESHOLD_BYTES}" \
+  -v min_rate="${AUTOMQ_STALL_MIN_SENT_BYTES_PER_SEC:-65536}" '
+  FILENAME == ARGV[1] {
+    if (NF == 4) { old_queue[$1]=$2; old_sent[$1]=$3; old_time[$1]=$4 }
+    next
+  }
+  /^vector_(buffer_size_bytes|component_sent_event_bytes_total)\{/ && /component_type="kafka"/ {
+    id=$0; sub(/^.*component_id="/, "", id); sub(/".*$/, "", id)
+    value=$0; sub(/^[^}]*}[[:space:]]+/, "", value)
+    split(value, fields, /[[:space:]]+/)
+    if (fields[1] !~ /^[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$/) next
+    if ($0 ~ /^vector_buffer_size_bytes/) queued[id]=fields[1]+0
+    else sent[id]=fields[1]+0
+  }
+  END {
+    lanes=0; bad=0
+    for (id in queued) {
+      lanes++
+      if (!(id in sent)) { bad=1; continue }
+      printf "%s %.0f %.0f %.0f\n", id, queued[id], sent[id], now
+      elapsed=now-old_time[id]
+      if (!(id in old_time) || elapsed <= 0 || elapsed > 300 || sent[id] < old_sent[id]) continue
+      rate=(sent[id]-old_sent[id])/elapsed
+      if (queued[id] >= threshold && queued[id] >= old_queue[id] && rate < min_rate) {
+        printf "Kafka producer stalled: lane=%s queued=%.0f sent_bytes_per_sec=%.0f\n", id, queued[id], rate > "/dev/stderr"
+        bad=1
+      }
+    }
+    exit (lanes == 0 || bad ? 1 : 0)
+  }
+' "${state_file}" - > "${state_file}.next" || status=$?
+mv "${state_file}.next" "${state_file}"
+exit "${status}"
 """
 
 
