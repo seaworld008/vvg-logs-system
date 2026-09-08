@@ -20,7 +20,24 @@ export function parseNativeHighlightFilters(value) {
   return filters;
 }
 
-export function installNativeFiltersHighlighter(context, host) {
+export function parseMessageHighlightFilters(encoded, expression, buildMessageFilter) {
+  if (typeof encoded !== "string" || encoded.length > 131072 || typeof buildMessageFilter !== "function") return [];
+  try {
+    const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const bytes = Uint8Array.from(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")), (char) => char.charCodeAt(0));
+    const state = JSON.parse(new TextDecoder().decode(bytes));
+    if (state.v !== 1 || !Array.isArray(state.conditions)) return [];
+    const generated = buildMessageFilter(state.logic, state.conditions, state.advanced);
+    if (expression !== generated && expression !== "(" + generated + ")") return [];
+    return state.conditions.filter(({operator}) => operator === "include").map(({value}) => ({
+      key: "_msg", text: String(value ?? "").replace(/\0/g, "").replace(/\r?\n/g, " ").trim(),
+    })).filter(({text}) => text.length > 0 && text.length <= 4096);
+  } catch (_error) {
+    return [];
+  }
+}
+
+export function installNativeFiltersHighlighter(context, host, buildMessageFilter) {
   const doc = host.ownerDocument;
   const win = doc?.defaultView;
   if (!win?.CSS?.highlights || !win.Highlight || !win.MutationObserver) return () => {};
@@ -40,7 +57,8 @@ export function installNativeFiltersHighlighter(context, host) {
     win.CSS.highlights.delete(registryName);
     const panel = scope.querySelector(panelSelector);
     const search = context.grafana.locationService.getSearchObject?.() || {};
-    const filters = parseNativeHighlightFilters(search["var-Filters"]);
+    const filters = [...parseNativeHighlightFilters(search["var-Filters"]),
+      ...parseMessageHighlightFilters(search["var-message_filter_state"], search["var-message_filter_expr"], buildMessageFilter)];
     if (!panel || !filters.length) return;
     const highlight = new win.Highlight();
     let budget = 1000000;
@@ -122,5 +140,6 @@ export function installNativeFiltersHighlighter(context, host) {
 
 export const nativeFilterHighlightScript = [
   parseNativeHighlightFilters.toString(),
+  parseMessageHighlightFilters.toString(),
   installNativeFiltersHighlighter.toString(),
 ].join("\n\n");

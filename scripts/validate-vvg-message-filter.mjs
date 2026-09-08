@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
-import { parseNativeHighlightFilters, installNativeFiltersHighlighter } from "./lib/native-filter-highlight.mjs";
+import { parseNativeHighlightFilters, parseMessageHighlightFilters, installNativeFiltersHighlighter } from "./lib/native-filter-highlight.mjs";
 
 const dashboardPath = new URL(
   "../docker-compose/grafana/dashboards/vvg-log-search.json",
@@ -53,13 +53,24 @@ const buildVvgMessageFilter = vm.runInNewContext(
 );
 
 assert.equal(buildVvgMessageFilter("AND", [], "*"), "*");
+const highlightState = Buffer.from(JSON.stringify({v: 1, logic: "AND", advanced: "*", conditions: [
+  {operator: "include", value: "海康"}, {operator: "exclude", value: "入参"},
+]})).toString("base64url");
+assert.deepEqual(parseMessageHighlightFilters(highlightState, '_msg:*"海康"* -_msg:*"入参"*', buildVvgMessageFilter), [{key: "_msg", text: "海康"}]);
+assert.deepEqual(parseMessageHighlightFilters(highlightState, '(_msg:*"海康"* -_msg:*"入参"*)', buildVvgMessageFilter), [{key: "_msg", text: "海康"}]);
+assert.deepEqual(parseMessageHighlightFilters(highlightState, '*', buildVvgMessageFilter), []);
+assert.deepEqual(parseMessageHighlightFilters('invalid', '*', buildVvgMessageFilter), []);
+for (const value of ["海康", "康门", "a.*[0](x)", "*", '" OR * | stats count()', "C:\\logs\\file.log"]) {
+  assert.equal(buildVvgMessageFilter("AND", [{ operator: "include", value }]), `_msg:*${JSON.stringify(value)}*`);
+  assert.equal(buildVvgMessageFilter("AND", [{ operator: "exclude", value }]), `-_msg:*${JSON.stringify(value)}*`);
+}
 assert.equal(
   buildVvgMessageFilter("AND", [{ operator: "include", value: "湖南非税" }], "*"),
-  '_msg:"湖南非税"',
+  '_msg:*"湖南非税"*',
 );
 assert.equal(
   buildVvgMessageFilter("AND", [{ operator: "exclude", value: "调试日志" }], "*"),
-  '-_msg:"调试日志"',
+  '-_msg:*"调试日志"*',
 );
 assert.equal(
   buildVvgMessageFilter(
@@ -70,7 +81,7 @@ assert.equal(
     ],
     "*",
   ),
-  '_msg:"退款申请" -_msg:"调试日志"',
+  '_msg:*"退款申请"* -_msg:*"调试日志"*',
 );
 assert.equal(
   buildVvgMessageFilter(
@@ -81,7 +92,7 @@ assert.equal(
     ],
     "*",
   ),
-  '(_msg:"湖南非税" OR -_msg:"调试日志")',
+  '(_msg:*"湖南非税"* OR -_msg:*"调试日志"*)',
 );
 assert.equal(
   buildVvgMessageFilter(
@@ -89,11 +100,11 @@ assert.equal(
     [{ operator: "include", value: '路径 C:\\\\logs\\\n"quoted"\0' }],
     "*",
   ),
-  '_msg:"路径 C:\\\\\\\\logs\\\\ \\\"quoted\\\""',
+  '_msg:*"路径 C:\\\\\\\\logs\\\\ \\\"quoted\\\""*',
 );
 assert.equal(
   buildVvgMessageFilter("AND", [{ operator: "include", value: "湖南非税" }], "level:=error"),
-  '(_msg:"湖南非税") (level:=error)',
+  '(_msg:*"湖南非税"*) (level:=error)',
 );
 assert.throws(
   () => buildVvgMessageFilter("AND", Array.from({ length: 21 }, () => ({ operator: "include", value: "x" })), "*"),
@@ -104,7 +115,7 @@ assert.throws(
   /高级过滤只允许 LogsQL 过滤条件/,
 );
 
-assert.equal(dashboard.version, 19);
+assert.equal(dashboard.version, 20);
 assert.deepEqual(parseNativeHighlightFilters(undefined), []);
 assert.deepEqual(parseNativeHighlightFilters(["", "broken", "|=|x", "file|!=|a", "file|=~|.*", "message|=|"]), []);
 assert.deepEqual(parseNativeHighlightFilters(["file|=|/logs/a.log", "file|=|/logs/a.log", "message|=|<script>|中文"]), [
