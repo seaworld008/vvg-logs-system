@@ -73,7 +73,8 @@ with tempfile.TemporaryDirectory() as tmp:
 
     try:
         docker('run', '-d', '--name', name, '--network', 'none', '--memory', '512m', '--memory-swap', '512m',
-               '--cpus', '0.5', '-v', f'{work}:/work', image, '--config', '/work/vector.yaml')
+               '--cpus', '0.5', '--user', f'{os.getuid()}:{os.getgid()}',
+               '-v', f'{work}:/work', image, '--config', '/work/vector.yaml')
         for _ in range(45):
             if len(rows()) >= 2:
                 break
