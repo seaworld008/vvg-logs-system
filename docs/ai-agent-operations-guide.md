@@ -130,7 +130,7 @@ node scripts/validate-vvg-message-filter.mjs
      -> 4 个 Dashboard 面板刷新
 ```
 
-包含生成 `_msg:"value"`，不包含生成 `-_msg:"value"`。AND 用空格连接；OR 用括号和 ` OR ` 连接。高级表达式只允许 LogsQL filter，禁止管道、换行和 NUL。
+多条件面板的包含生成 `_msg:*"value"*`，不包含生成 `-_msg:*"value"*`，按文字子串匹配。值仍先引用、转义，不把输入当正则或 LogsQL。AND 用空格连接；OR 用括号和 ` OR ` 连接。高级表达式只允许 LogsQL filter，禁止管道、换行和 NUL。顶部原生 `message` 变量保持 `_msg:$message` 的词/短语搜索语义。
 
 ## 5. 变更前备份
 

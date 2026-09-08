@@ -154,7 +154,7 @@ function buildVvgMessageFilter(logic, conditions, advanced = "*") {
       .trim();
     if (!value) throw new Error("message 条件内容不能为空");
     const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    return (condition.operator === "exclude" ? "-" : "") + '_msg:"' + escaped + '"';
+    return (condition.operator === "exclude" ? "-" : "") + '_msg:*"' + escaped + '"*';
   });
 
   const advancedFilter = String(advanced || "*").trim() || "*";
@@ -180,7 +180,7 @@ const host = context.element.matches && context.element.matches(".vvg-message-fi
   ? context.element
   : context.element.querySelector(".vvg-message-filter");
 if (!host) return;
-const disposeNativeHighlights = installNativeFiltersHighlighter(context, host);
+const disposeNativeHighlights = installNativeFiltersHighlighter(context, host, buildVvgMessageFilter);
 
 const rowsHost = host.querySelector(".vvg-filter-rows");
 const summary = host.querySelector(".vvg-filter-summary");
@@ -548,9 +548,9 @@ for (const item of dashboard.panels) {
     }
   }
 }
-dashboard.version = 19;
+dashboard.version = 20;
 
 await mkdir(dirname(panelPath), { recursive: true });
 await writeFile(panelPath, `${JSON.stringify(panel, null, 2)}\n`, "utf8");
 await writeFile(dashboardPath, `${JSON.stringify(dashboard, null, 2)}\n`, "utf8");
-console.log("Rendered Business Text message filter and VVG log search dashboard version 19");
+console.log("Rendered Business Text message filter and VVG log search dashboard version 20");

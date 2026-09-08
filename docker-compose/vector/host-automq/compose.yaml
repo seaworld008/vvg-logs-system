@@ -21,8 +21,8 @@ services:
     ports:
       - "${METRICS_BIND_IP:-127.0.0.1}:${METRICS_PORT:-19610}:9598"
     cpus: 1.0
-    mem_limit: 512m
-    memswap_limit: 512m
+    mem_limit: 1g
+    memswap_limit: 1g
     pids_limit: 256
     security_opt: ["no-new-privileges:true"]
     tmpfs: ["/tmp:size=32m,mode=1777"]
