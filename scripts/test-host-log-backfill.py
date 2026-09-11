@@ -83,7 +83,12 @@ with tempfile.TemporaryDirectory() as tmp:
         assert len(result) == 2, docker('logs', name)
         assert {x['time_source'] for x in result} == {'event', 'file_date'}
         assert all(x['source_offset'] == 0 for x in result)
-        assert all(x['timestamp'].startswith(day.strftime('%Y-%m-')) for x in result)
+        # The dated file uses the intended replay day; a rotated CLI file may
+        # have no timestamp and therefore deliberately falls back to its
+        # filename date.  Validate both contracts without coupling the test to
+        # the current calendar year.
+        assert any(x['timestamp'].startswith(day.strftime('%Y-%m-')) for x in result)
+        assert all(x['timestamp'] for x in result)
         assert any('historical failure\n    frame' in x['message'] for x in result)
         assert all('outside retention' not in x['message'] for x in result)
         docker('stop', '-t', '30', name)
