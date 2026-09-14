@@ -4,7 +4,11 @@
 
 Grafana 镜像和插件采用两个独立的固定版本。插件先发布到宿主机版本目录，再以只读方式挂载；生产容器启动时不会联网安装或更新插件，避免插件下载卡住后 Grafana 无法监听。
 
+本仓库不会因为执行 `docker compose up` 自动下载插件。首次部署必须先运行插件发布脚本；只启动 Compose 而未准备 release 目录时，VictoriaLogs 数据源或 Business Text 过滤面板会缺失。镜像标签也不能代替版本核验：启动后应同时检查挂载目录中的 `plugin.json` 版本和 Grafana 的 `/api/plugins` 注册状态。
+
 外置插件挂载到 `/var/lib/grafana-plugins`，并通过 `GF_PATHS_PLUGINS` 显式启用。Compose 同时设置 `GF_PLUGINS_PREINSTALL_DISABLED=true` 和 `GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false`，避免 Grafana 13 后台向只读目录安装或更新建议插件。不要安装到 `/var/lib/grafana/plugins`：插件生命周期会重新与 SQLite 数据目录耦合。
+
+升级排查时先区分三层状态：宿主机 release 目录是否有完整插件、容器是否以只读方式挂载该目录、Grafana 是否注册插件。空的外部目录会覆盖镜像内插件；缺少 Business Text 时，使用该面板的 Dashboard 会显示“Plugin not found”。数据源 UID 也必须与目标 Grafana 实例实际 UID 对齐，不能直接假定示例中的 `victorialogs-ds` 在所有手工导入的实例中存在。
 
 ## 1. 发布插件包
 
