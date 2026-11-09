@@ -74,6 +74,11 @@ Java 按完整日志头合并堆栈；ThinkPHP 按请求头、下一边界和空
 不能直接移除生产资源边界。需要验证的行为包括重启恢复、轮转、跨文件隔离、正文
 内容、深层目录、脱敏和纯分隔线为零；测试入口见文末。
 
+资源上限按 source 数量估算，并考虑节点重启后的追赶峰值：现场 40 个 source 的采集端
+稳态约 1.4 GiB，在 1 GiB 上限下重启追赶时 OOM 循环约 2 小时。用 `docker update`
+救急后必须同步 Compose 的 `VECTOR_MEM_LIMIT`，否则下次重建会复发。详见
+[内存与恢复手册](vector-memory-and-recovery-runbook.md#主机-compose-采集端重启后追赶的内存与资源漂移)。
+
 ## 4. 正文从采集到复制 JSON 的完整契约
 
 ```text

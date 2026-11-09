@@ -327,6 +327,16 @@ validate_static() {
     "Docker Vector does not duplicate business logs to stdout"
   require_literal "docker-compose/vector/env.example" 'VECTOR_API_BIND=127.0.0.1' \
     "Docker Vector API binds to host loopback by default"
+  require_literal "docker-compose/vector/docker-compose.yml" 'mem_limit: ${VECTOR_MEM_LIMIT:-1g}' \
+    "Docker Vector has a parameterized memory limit"
+  require_literal "docker-compose/vector/host-automq/compose.yaml" 'mem_limit: ${VECTOR_MEM_LIMIT:-1g}' \
+    "Host collector memory limit is parameterized"
+  for manifest in k8s-deployment/vector/vvg/direct-containerd.yaml \
+                  k8s-deployment/vector/vvg/direct-docker.yaml \
+                  k8s-deployment/vector/vvg/automq-containerd-production.yaml; do
+    require_literal "${manifest}" '\d{1,3}(?:\.\d{1,3}){3}\s' \
+      "${manifest} treats IPv4-prefixed access-log lines as new events"
+  done
 
   require_literal "${mcp_compose}" 'version: "2.4"' \
     "VictoriaLogs MCP Compose stays compatible with the validated legacy host"

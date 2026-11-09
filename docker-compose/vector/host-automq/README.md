@@ -108,9 +108,12 @@ IdempotentWrite；消费者只获该 Topic 的 Read/Describe 和固定 group 的
 （仓库根目录 `docs/host-log-history-backfill-runbook.md`），先核对后端保留期和已入库 offset，
 从冻结副本单独回放。不要清空常驻 state；正常采集继续按日志根目录的 `**/*.log` 自动发现轮转文件。
 
-- 采集端最多 1 CPU / 1 GiB；每进程 2 GiB disk/block buffer、64 MiB Kafka native queue。
-  这是 cgroup 使用上限，不是预占内存。现有主机改变上限时先核对余量，保存并验证实际 Compose，
-  可用 `docker update` 热更新资源再同步 Compose，避免为改上限重置采集位置。其他环境不自动升级。
+- 采集端 1 CPU，内存上限由 `.env` 的 `VECTOR_MEM_LIMIT` 设置（默认 `1g`，同时作为 memswap）；
+  每进程 2 GiB disk/block buffer、64 MiB Kafka native queue。这是 cgroup 使用上限，不是预占内存。
+  按 file source 数量和重启后的追赶量调整：实测 2～6 个 source 约 400 MiB，40 个 source 稳态
+  约 1.4 GiB，超过约 20 个 source 建议 `2g`。现有主机改变上限时先核对余量；可用 `docker update`
+  热更新资源，但必须在同一次变更里同步 `VECTOR_MEM_LIMIT` 并执行 `docker compose config`，
+  否则下次重建会退回旧值（现场曾因此在节点重启后 OOM 循环）。其他环境不自动升级。
 - 消费者 1 CPU / 768 MiB；memory/block 64 events、2 个在途请求、Kafka offset 持久重放。
 - 120 秒优雅停止；容器自身日志最多 `20 MiB x 3`。监控入口只绑定 loopback 或批准的内网。
 - Java/PHP 按日志头和 3 秒空闲超时合并，正常 9,000 行堆栈不按行数拆分。
