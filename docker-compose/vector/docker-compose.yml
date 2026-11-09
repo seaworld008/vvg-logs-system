@@ -20,6 +20,11 @@ services:
       - "${VECTOR_API_BIND}:${VECTOR_PORT}:8686"
     networks:
       - vvg-monitoring
+    # 资源上限：cgroup 使用上限，不是预占。已有部署先用 docker stats 测稳态内存，再设置
+    # VECTOR_MEM_LIMIT（建议不低于稳态的 1.5 倍，并覆盖节点重启后的追赶峰值）。
+    cpus: ${VECTOR_CPUS:-1.0}
+    mem_limit: ${VECTOR_MEM_LIMIT:-1g}
+    memswap_limit: ${VECTOR_MEM_LIMIT:-1g}
     # 日志驱动 & 轮转，防止容器日志过大
     logging:
       driver: json-file

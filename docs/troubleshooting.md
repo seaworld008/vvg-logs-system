@@ -70,6 +70,28 @@ curl -fsSG 'http://VICTORIALOGS_HOST:9428/select/logsql/query' \
 
 推荐基线见 `k8s-deployment/vector/vvg/direct-containerd.yaml`。正常低频 Java 日志可能等待最多约 3 秒多行收束加 1 秒批次，不应出现分钟级积压。
 
+### collector 内存偏高、前端访问日志变成一条超长记录
+
+H5/静态站容器的 Nginx 访问日志以 `IP - - [时间]` 开头。如果多行合并的 `starts_when`
+不认这种行首，连续流量会被合并进同一条记录（现场单条达到约 30 万行），内存随之上涨。
+在 `/var/log/pods` 上按 `starts_when` 统计“每条记录的最大行数”即可确认；修正方法是给
+`starts_when` 加 IPv4 行首规则，而不是加 `max_events`。正常 Java/网关长日志（实测最大
+1.7 万行）必须保持完整。详见
+[内存与恢复手册](vector-memory-and-recovery-runbook.md#2026-11-现场复盘多行边界追赶内存与配置漂移)。
+
+### 主机采集端重启后反复 OOM
+
+节点或容器重启后，采集端要追赶停机期间的日志，file source 越多峰值越高（实测 40 个
+source 稳态约 1.4 GiB）。核对 `docker inspect -f '{{.HostConfig.Memory}}'` 与 Compose
+中的上限是否一致：只用 `docker update` 调大而没改 Compose，下次重建会退回旧值。
+Host Compose 用 `VECTOR_MEM_LIMIT` 设置上限并 `docker compose config` 校验。
+
+### 改完配置后日志发往旧地址或缺少标签
+
+服务器上的清单可能已经落后于线上（地址、标签被人直接改过线上对象）。应用前必须
+`kubectl diff -f <文件>`，只允许出现本次批准的改动。disk buffer + `when_full: block`
+能保住发错地址期间的数据，但缺失的标签无法回填。
+
 ### Grafana 查询按钮持续转圈
 
 先检查 Grafana 请求日志：

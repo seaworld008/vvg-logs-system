@@ -9,7 +9,7 @@
 | 角色 | 持久或内存排队 | 并发与批次 | 容器边界 |
 |---|---|---|---|
 | VVG producer | 两条 Kafka lane，每条 native queue 64 MiB；各 5 GiB disk/block | Zstd、500 events / 1 MiB、1 秒、linger 100ms；ack + idempotence | 保留现场 CPU/内存；公开模板 2 GiB，不能把现场十进制 `2G` 当成 `2Gi` |
-| Gateway producer | Kafka native queue 64 MiB、2 GiB disk/block | 与 VVG 相同的 Kafka 批次和交付语义 | 公开模板 1 GiB |
+| Gateway producer | Kafka native queue 64 MiB、2 GiB disk/block | 与 VVG 相同的 Kafka 批次和交付语义 | 公开模板 1.5 GiB（GeoIP 库常驻内存，1 GiB 时现场占用约 67%） |
 | VVG consumer | 每实例 memory/block 64 events；保留 Kafka offset | 每批最多 512 KiB / 500 events，1 秒；最多 2 个在途 HTTP 请求 | 三实例各 1 CPU / 1.5 GiB，独立 state 与 metrics |
 | Gateway consumer | memory/block 16 events；保留 Kafka offset | 每批最多 2 MiB / 2000 events，1 秒；最多 2 个在途请求 | 0.5 CPU / 512 MiB |
 | Gateway 大事件 fallback | 解析和脱敏后使用 1 GiB disk/block | 单个在途请求，保留 180 秒超时和异步写入确认 | 与 Gateway producer 共用资源边界 |
@@ -53,6 +53,75 @@ Gateway 继续运行已有的 9000 行 JSON 及超 100 KiB 单行解析测试；
 
 上述极端边界作为独立风险保留，不为罕见超限事件继续引入新的复杂方案。出现实际
 超限事件时先记录字节规模与来源，再做独立方案评估。
+
+## 2026-11 现场复盘：多行边界、追赶内存与配置漂移
+
+测试与生产 Kubernetes 采集端、主机 Compose 采集端的一轮排查，结论如下。数值来自
+现场实测，用于理解量级，不是容量承诺。
+
+### 访问日志必须被识别为“新条目”
+
+`enhance_multiline` 的 `starts_when` 原来只认时间戳和 `INFO/WARN/...` 开头。前端容器
+（H5、大屏、管理端静态站）输出的 Nginx/combined 访问日志以 `IP - - [时间]` 开头，
+永远不匹配，于是每一行都被当成“上一条的续行”。只要流量连续、没有 3 秒空闲，几十万行
+会被合并进同一条记录：现场单个容器最大约 30 万行。
+
+- 影响：reduce 状态无界增长，collector 内存偏高；单条记录容易逼近 Kafka 4 MiB 或
+  VictoriaLogs 2 MiB 边界；访问日志无法按行检索。
+- 处理：`starts_when` 增加 `\d{1,3}(?:\.\d{1,3}){3}\s`（IPv4 + 空格开头 = 新条目）。
+  生产两个 collector 内存由约 578/916 MiB 降到约 280/436 MiB，之后稳定在约 400 MiB。
+- 回归：`scripts/test-vvg-multiline-preservation.sh` 同时验证 9000 行 Java 正文逐字节
+  合并为一条、3 行访问日志保持 3 条。
+- 以后接入新的非 Java 格式（logfmt `ts=`/`level=`、自定义前缀等）时，同样先补日志头
+  规则和合成测试；不能用行数上限掩盖边界错误。
+
+### 不用 `max_events` 截断正常长日志
+
+排查中曾临时给 reduce 加 `max_events`，复查后撤回。网关 `system-gateway-server` 合法的
+多行日志（格式化 JSON 响应体）实测最大 17,448 行、约 381 KiB，远低于字节边界；任何
+固定行数都会把它拆成多条。真正的失控来源是上一节的访问日志边界，修正后无需行数上限。
+仓库继续保持“正常多行日志按日志头和空闲超时完整合并”的基线，CI 断言 reduce 中没有
+`max_events` 和 `end_every_period_ms`。
+
+### 主机 Compose 采集端：重启后追赶的内存与资源漂移
+
+一台主机的直写采集端有 40 个 file source。节点重启后需要追赶停机期间的日志，内存上涨，
+而 Compose 上限仍是 1 GiB，于是约 2 小时内每分钟被 OOM 杀一次（共 124 次），直到有人
+用 `docker update` 把运行中容器改成 2 GiB。问题在于 Compose 文件没有同步，下次重建会
+退回 1 GiB 并再次进入 OOM 循环。
+
+| file source 数量 | 实测稳态内存 | 建议上限 |
+|---|---|---|
+| 2～6 个 | 约 400 MiB | 1 GiB |
+| 40 个 | 约 1.4 GiB（峰值触及 2 GiB） | 2 GiB |
+
+- `docker-compose/vector/host-automq/compose.yaml` 的内存上限改为 `VECTOR_MEM_LIMIT`
+  （默认 `1g`，同时作为 memswap）。超过约 20 个 source 时建议 `2g`，并在节点计划重启后
+  观察追赶期间的峰值。
+- 热更新资源可以用 `docker update`，但必须在同一次变更里同步 `.env`/Compose 并执行
+  `docker compose config` 校验；README 和 SHA256SUMS 同步更新。
+- 统计内存时区分匿名内存和文件缓存：cgroup `memory.stat` 的 `anon` 才是真实堆，
+  `docker stats` 会扣除 inactive file 但仍包含 active file。
+
+### 应用清单前先对比线上
+
+测试集群一次调优直接 `kubectl apply` 了服务器目录中的清单，而该文件早已落后于线上：
+VictoriaLogs 地址是旧值，还缺少 `cluster/environment/project/service` 四个标签。结果约
+15 分钟的日志发往无人监听的地址。disk buffer + `when_full: block` 保住了数据，修复后全部
+补送，按事件时间统计没有缺口；但这段时间约 7.8 万行没有那四个标签，已无法回填。
+
+- 改任何现场清单前：导出线上 ConfigMap/DaemonSet，`kubectl diff -f <文件>` 确认文件与
+  线上一致；不一致时先按线上重建文件并说明，再叠加本次改动。
+- 应用前再次 `kubectl diff`，结果只能包含批准的字段；应用后 diff 应为空。
+- 只改 ConfigMap 时 DaemonSet 不会滚动。生产清单用 `vector-config-sha256` 注解触发滚动，
+  值应等于新 `vector.yaml` 内容的 SHA-256（生成器会自动计算）；现场曾发现该注解与配置
+  不符，修改时一并纠正。不要用 `kubectl rollout restart` 制造文件与线上的漂移。
+
+### 探针超时
+
+直写模板的 readiness/liveness 原来使用默认 1 秒超时。负载高时 `/health` 偶尔超过 1 秒，
+readiness 失败，liveness 失败还会重启并重放。直写模板改为 `timeoutSeconds: 5`、
+`failureThreshold: 5`；AutoMQ producer 的 liveness 仍由生成器固定为 10 秒 / 3 次。
 
 ## 恢复判据
 

@@ -71,6 +71,9 @@ Vector位于 `k8s-deployment/vector/gateway/`，Grafana可选配置位于
 - VVG/Gateway 直写配置必须长期保留；小到中等规模优先直写，中大规模且需要集中缓冲时再采用 AutoMQ + 对象存储。
 - Vector 内存与恢复任务必须读取 `docs/vector-memory-and-recovery-runbook.md`。Kafka native queue 每 sink 64 MiB；VVG/Gateway consumer 分别为 64/16 个 memory/block 事件和最多 2 个在途请求；Gateway 采集端大事件 fallback 为 1 GiB disk/block、单个在途请求。
 - 正常 Java 多行日志按日志头和空闲超时完整合并，不按固定行数截断或拆段。当前默认不引入无损关联分片；极端日志的既有截断和后端大小限制必须如实记录，不能宣称全部超大日志无损。
+- `starts_when` 必须识别所有已知的单行日志行首，包括 Nginx/combined 访问日志的 IPv4 行首；否则连续流量会被合并成超大记录。接入新格式时先补日志头规则和合成测试，禁止用 `max_events` 掩盖边界错误。
+- 修改现场清单前先导出线上对象并 `kubectl diff`，文件与线上不一致时先按线上重建；应用前 diff 只能包含批准字段，应用后 diff 为空。只改 ConfigMap 时更新 `vector-config-sha256`（等于新 `vector.yaml` 的 SHA-256）触发滚动，不用 `rollout restart` 制造漂移。
+- 主机 Compose 采集端的内存上限用 `VECTOR_MEM_LIMIT`，按 source 数量和重启追赶峰值设置；`docker update` 热更新后必须同步 Compose 并 `docker compose config` 校验。
 - 四条 production链路由 `docs/log-pipeline-selection.md` 统一索引；直写清单是源，仓库 AutoMQ清单必须由 `scripts/render-automq-example-manifests.py` 生成并通过防漂移检查。
 - AutoMQ 迁移阶段未经单独授权，不得停止或重建 `redis-v9`、`elk_redis`、Logstash、Kibana、Elasticsearch、VictoriaLogs、ClickHouse、Grafana或业务服务。已单独批准的旧 ELK 退役或 VictoriaLogs 容量调整先读 `docs/elk-retirement-and-victorialogs-capacity-runbook.md`，按实际所有权限定对象。
 
