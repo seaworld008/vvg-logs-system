@@ -42,7 +42,7 @@ PHP 的 `service` 和兼容 `container` 统一以 `php_` 开头。老教务后�
 runtime/log，应该在共享目录所有者处采集一次；不能在每个 NFS 客户端重复部署相同
 采集。此时 `instance/pod` 表示采集主机，不能冒充实际写入容器。莆田后台和 API
 共用文件时统一标为 `php_jxgl-ptlndx`；精确区分写入实例需要应用增加身份字段或使用
-独立日志目录。Nginx access/error 日志不包含在这些应用日志清单中。
+独立日志目录。Nginx access/error 日志按下文“Nginx 文件日志”单独声明。
 
 每个已经确认的日志根目录使用递归模式：
 
@@ -63,6 +63,40 @@ mounts:
 业务函数后确认这些 txt 是推送收件账号批量文件，不是日志；因此明确排除。文件扩展名
 看起来像文本不代表可以当作日志采集。未来增加日志根目录时先确认所有权、用途、格式
 和敏感字段，再补入 inventory；不能一概使用 `runtime/**/*`。
+
+## Nginx 文件日志
+
+主机 Nginx 日志复用所在主机已有的采集端和项目 Topic，不新建容器、Topic 或消费者。
+在 inventory 中新增一个 `format: nginx` 条目即可：
+
+```yaml
+- id: nginx_example            # 稳定 source ID，决定 checkpoint 目录
+  service: nginx-example       # 与同业务 PHP 服务并列，例如 nginx-jxgl / nginx-jxgl-ptlndx
+  format: nginx
+  namespace: php               # 与所属业务同一 namespace，Dashboard 才会归在一起
+  legacy_index: example-nginx
+  include:
+  - /data/apps/example/nginx_logs/access_log
+  - /data/apps/example/nginx_logs/error_log
+  mounts:
+  - /data/apps/example/nginx_logs
+```
+
+- `format: nginx` 不配置 multiline，每行一个事件；`language` 默认为 `text`，`log_type` 默认为 `access`。
+- `namespace` 默认等于 `language`（`text`）。归属某业务时必须显式填写，否则会落在 `text` 下，
+  与业务 PHP 日志分开显示。
+- 共享 normalize 的 `if .log_format == "nginx"` 块统一处理三种行：JSON access（`status`、
+  `request_time`、`upstream_*`、`time`）、combined access（`[$time_local]` 和状态码）、
+  error log（`YYYY/MM/DD HH:MM:SS [level]`，按 Asia/Shanghai 解析）。access 级别按状态码：
+  5xx=error、4xx=warn、其余 info；error log 的 crit/alert/emerg 记为 critical。
+- include 只写确认的 access/error 文件，不要用 `*` 带上同目录的 worker 等其他程序日志。
+- 已有大文件首次接入时只对新 source 做一次 EOF 初始化：先以 `--initial-tail` 渲染上线，
+  确认该 source 的每个文件都已写出 checkpoint（没有新行的文件不会写，必要时产生一条无害请求），
+  再改回 `read_from: beginning` 重启；其他 source 的 state 保持不变。
+- 多副本容器内 Nginx 写同一 NFS 文件时只在文件所有者采集一次；此时 `remote_addr`
+  通常是前置代理地址，真实客户端需要前置 Nginx 日志或 `X-Forwarded-For`。
+
+JSON 行没有 `message` 字段时保留整行作为正文（以前会变成空串被空行过滤丢弃）。
 
 ## 验证
 
