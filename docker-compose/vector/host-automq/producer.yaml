@@ -21,9 +21,9 @@ transforms:
       parsed, parse_error = parse_json(msg)
       if parse_error == null && is_object(parsed) {
         .parse_status = "json"
-        msg = to_string(parsed.message) ?? msg
+        if is_string(parsed.message) && parsed.message != "" { msg = string!(parsed.message) }
         .level = downcase(to_string(parsed.level) ?? to_string(parsed.log_level) ?? "unknown")
-        ts = to_string(parsed.timestamp) ?? to_string(parsed."@timestamp") ?? ""
+        ts = to_string(parsed.timestamp) ?? to_string(parsed."@timestamp") ?? to_string(parsed.time) ?? ""
         parsed_time, time_error = parse_timestamp(ts, "%+")
         if time_error == null {
           .timestamp = parsed_time
@@ -52,6 +52,54 @@ transforms:
               }
             }
           }
+        }
+      }
+      if .log_format == "nginx" {
+        # Reusable nginx parsing: any source labelled log_format=nginx (JSON access, combined access, error log).
+        nginx_json, nginx_json_error = parse_json(string!(.message))
+        if nginx_json_error == null && is_object(nginx_json) && exists(nginx_json.status) {
+          .parse_status = "nginx_json"
+          .log_type = "access"
+          .http_status = to_int(nginx_json.status) ?? 0
+          .request_time = to_float(nginx_json.request_time) ?? 0.0
+          .upstream_status = string(nginx_json.upstream_status) ?? "-"
+          .upstream_response_time = string(nginx_json.upstream_response_time) ?? "-"
+          json_time, json_time_error = parse_timestamp(string(nginx_json.time) ?? "", "%+")
+          if json_time_error == null {
+            .timestamp = json_time
+            .time_source = "event"
+          }
+        } else {
+          acc, acc_error = parse_regex(msg, r'^\S+ \S+ \S+ \[(?P<tl>[^\]]+)\] "[^"]*" (?P<status>\d{3}) ')
+          if acc_error == null {
+            .parse_status = "nginx_access"
+            .log_type = "access"
+            .http_status = to_int(acc.status) ?? 0
+            acc_time, acc_time_error = parse_timestamp(string!(acc.tl), "%d/%b/%Y:%H:%M:%S %z")
+            if acc_time_error == null {
+              .timestamp = acc_time
+              .time_source = "event"
+            }
+          } else {
+            err, err_error = parse_regex(msg, r'^(?P<ts>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<lvl>[a-z]+)\]')
+            if err_error == null {
+              .parse_status = "nginx_error"
+              .log_type = "error"
+              lvl = string!(err.lvl)
+              if includes(["crit", "alert", "emerg"], lvl) { lvl = "critical" }
+              .level = lvl
+              err_time, err_time_error = parse_timestamp(string!(err.ts), "%Y/%m/%d %H:%M:%S", timezone: "Asia/Shanghai")
+              if err_time_error == null {
+                .timestamp = err_time
+                .time_source = "event"
+              }
+            }
+          }
+        }
+        if exists(.http_status) {
+          status = to_int(.http_status) ?? 0
+          .level = "info"
+          if status >= 500 { .level = "error" } else if status >= 400 { .level = "warn" }
         }
       }
       msg = replace(msg, r'(?m)^[ \t]*[-=]{5,}[ \t]*\r?(?:\n|$)', "")

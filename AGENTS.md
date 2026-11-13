@@ -87,7 +87,7 @@ Vector位于 `k8s-deployment/vector/gateway/`，Grafana可选配置位于
 - runtime 先盘点用途，再递归采集确认的日志根目录；共享 NFS 文件指定一个采集所有者，禁止把缓存、会话或业务账号列表当日志。
 - `message` 在 Kafka 中是唯一正文；消费者转为 `_msg`，明细查询临时复制 `message`。不能只凭入库条数证明正文可搜索。
 - 首次 EOF 初始化只在采集器停止且明确接受丢失的迁移窗口执行；日常升级保留 source ID、fingerprint 和 state，禁止重置 checkpoint。
-- 本路线不修改 CCE 采集或 Nginx 日志，不顺带退役旧 ELK、Redis 和历史数据。
+- 本路线不修改 CCE 采集，不顺带退役旧 ELK、Redis 和历史数据。主机 Nginx access/error 文件按 `format: nginx` 接入同一采集端和项目 Topic：单行事件、共享 normalize 解析，`namespace` 显式写成所属业务（例如老教务为 `php`），服务名 `nginx-<业务>`。
 
 ## Dashboard 修改
 

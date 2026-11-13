@@ -58,7 +58,7 @@ def render(spec, initial=False):
         if not re.fullmatch(r'[a-z][a-z0-9_]*', sid) or sid in known:
             raise ValueError('Source IDs must be unique, stable lowercase identifiers')
         known.add(sid)
-        if item['format'] not in ('java', 'php', 'text'):
+        if item['format'] not in ('java', 'php', 'text', 'nginx'):
             raise ValueError('Unsupported format')
         if not item['include'] or not item['mounts']:
             raise ValueError('Explicit source paths and read-only log mounts are required')
@@ -74,13 +74,17 @@ def render(spec, initial=False):
                'glob_minimum_cooldown_ms':1000, 'oldest_first':False, 'max_read_bytes':65536,
                'max_line_bytes':16777216, 'rotate_wait_secs':300,
                'fingerprint':{'strategy':'device_and_inode'}, 'offset_key':'source_offset'}
-        if item['format'] != 'text':
+        if item['format'] in ('java', 'php'):
             pattern = item.get('header', JAVA_HEADER if item['format'] == 'java' else PHP_HEADER)
             boundary = f'(?:{pattern}|{SEPARATOR})' if item['format']=='php' else pattern
             src['multiline'] = {'start_pattern':pattern,'condition_pattern':boundary,'mode':'halt_before','timeout_ms':3000}
         cfg['sources'][sid] = src
         project = route['project']
-        language=item.get('language',item['format'])
+        # nginx access/error lines are single-line events parsed by the shared normalize block.
+        language=item.get('language','text' if item['format']=='nginx' else item['format'])
+        namespace=item.get('namespace',language)
+        if not re.fullmatch(r'[a-z][a-z0-9-]{0,62}',namespace):
+            raise ValueError('Invalid namespace')
         service=item['service']
         if language=='php' and not service.startswith('php_'):
             service='php_'+service
@@ -88,7 +92,8 @@ def render(spec, initial=False):
             raise ValueError('The approved legacy PHP index exceptions must remain in legacy-php')
         fields = {'cluster':project,'project':project,'project_name':route['project_name'],
                   'environment':route['environment'],'service':service,'instance':spec['hostname'],
-                  'source_kind':'file','language':language,'log_type':item.get('log_type','application'),'namespace':language,
+                  'source_kind':'file','language':language,
+                  'log_type':item.get('log_type','access' if item['format']=='nginx' else 'application'),'namespace':namespace,
                   'container':service,'pod':spec['hostname'],
                   'log_format':item['format'],'legacy_index':item.get('legacy_index',''), 'source_id':sid}
         cfg['transforms']['identify_'+sid] = {'type':'remap','inputs':[sid],

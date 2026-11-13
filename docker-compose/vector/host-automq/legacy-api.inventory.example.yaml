@@ -20,3 +20,12 @@ files:
       - /data/apps/putian/runtime/log/**/*.jsonl
       - /data/apps/putian/runtime/log/**/*.ndjson
     mounts: [/data/apps/putian/runtime/log]
+  - id: nginx_jxgl_ptlndx
+    service: nginx-jxgl-ptlndx
+    format: nginx
+    namespace: php
+    legacy_index: jxgl-ptlndx-nginx
+    include:
+      - /data/apps/putian/nginx_logs/access_log
+      - /data/apps/putian/nginx_logs/error_log
+    mounts: [/data/apps/putian/nginx_logs]

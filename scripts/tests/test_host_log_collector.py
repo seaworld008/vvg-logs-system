@@ -29,6 +29,24 @@ class HostCollectorTest(unittest.TestCase):
         host['files'][0]['mounts']=['/data']
         with self.assertRaises(ValueError): renderer.render(host)
 
+    def test_nginx_format_is_single_line_with_project_namespace(self):
+        host={'project':'legacy-php','hostname':'node-01','files':[{'id':'nginx_site','service':'nginx-site',
+              'format':'nginx','namespace':'php','legacy_index':'jxgl-ptlndx-nginx',
+              'include':['/data/apps/site/nginx/access_log'],'mounts':['/data/apps/site/nginx']}]}
+        cfg,compose=renderer.render(host)
+        self.assertNotIn('multiline',cfg['sources']['nginx_site'])
+        identify=cfg['transforms']['identify_nginx_site']['source']
+        for line in ('.namespace = "php"','.language = "text"','.log_format = "nginx"',
+                     '.log_type = "access"','.service = "nginx-site"','.cluster = "legacy-php"'):
+            self.assertIn(line,identify)
+        self.assertIn('if .log_format == "nginx" {',cfg['transforms']['normalize']['source'])
+        self.assertIn('/data/apps/site/nginx:/data/apps/site/nginx:ro',compose['services']['vector']['volumes'])
+        host['files'][0].pop('namespace')
+        cfg,_=renderer.render(host)
+        self.assertIn('.namespace = "text"',cfg['transforms']['identify_nginx_site']['source'])
+        host['files'][0]['namespace']='Bad NS'
+        with self.assertRaises(ValueError): renderer.render(host)
+
     def test_consumer_preserves_scope_and_replay(self):
         cfg=renderer.render_consumer()
         self.assertEqual(cfg['sources']['kafka_vvg']['auto_offset_reset'],'earliest')

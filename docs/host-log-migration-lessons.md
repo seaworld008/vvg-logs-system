@@ -30,7 +30,10 @@
 旧索引 `jxgl-ptlndx*` 和 `php_jxgl_log*` 是旧来源分类的两个例外，其他 PHP 归网大。
 新增 API 根据确认的业务归属显式配置；不要把 `jxgl*` 扩大成通用分类正则。
 后台和 API 不创建独立服务名。改服务标签时保留 source ID、fingerprint 和 state，
-历史记录的旧标签不回写。CCE 采集与 Nginx access/error 日志不在本次迁移范围。
+历史记录的旧标签不回写。CCE 采集不在本次迁移范围；Nginx access/error 文件按
+[主机日志格式规则](host-log-format-rules.md#nginx-文件日志)以 `format: nginx` 接入，
+老教务为 `nginx-jxgl`、莆田为 `nginx-jxgl-ptlndx`，均在 `legacy-php` / `php` 下。
+把已有服务从 `text` 改到 `php` namespace 时只改 identify 标签并热加载，旧记录仍留在 `text`。
 
 每个项目一个 Topic、一个消费者组和一个 Vector 消费者，多个服务用字段筛选。
 沿用 `logs.<environment>.<project>.v1`，后续增加服务不增加 Topic 或消费者。
